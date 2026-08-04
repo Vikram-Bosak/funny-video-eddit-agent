@@ -16,7 +16,7 @@ async def fetch_latest_video_url(rss_url: str) -> str:
     
     if not feed.entries:
         logger.warning("No entries found in the RSS feed. Falling back to a default funny video...")
-        return "https://www.youtube.com/watch?v=FzRH3iTQPrk"
+        return "https://www.youtube.com/watch?v=jNQXAC9IVRw"
         
     for entry in feed.entries:
         post_url = entry.link
@@ -27,7 +27,7 @@ async def fetch_latest_video_url(rss_url: str) -> str:
         return post_url
         
     logger.warning("Could not find a valid post in the RSS feed. Falling back to default.")
-    return "https://www.youtube.com/watch?v=FzRH3iTQPrk"
+    return "https://www.youtube.com/watch?v=jNQXAC9IVRw"
 
 async def download_video(rss_url: str):
     target_url = await fetch_latest_video_url(rss_url)
