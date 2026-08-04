@@ -15,12 +15,10 @@ async def fetch_latest_video_url(rss_url: str) -> str:
     feed = await asyncio.to_thread(feedparser.parse, rss_url)
     
     if not feed.entries:
-        logger.error("No entries found in the RSS feed.")
-        sys.exit(1)
+        logger.warning("No entries found in the RSS feed. Falling back to a default funny video...")
+        return "https://twitter.com/fasc1nate/status/1714392652752531635"
         
     for entry in feed.entries:
-        # Nitter RSS items often have video links or we can just grab the post URL
-        # Convert nitter URL to Twitter URL for yt-dlp to handle better
         post_url = entry.link
         if "nitter." in post_url:
             post_url = post_url.replace(post_url.split('/')[2], "twitter.com")
@@ -28,8 +26,8 @@ async def fetch_latest_video_url(rss_url: str) -> str:
         logger.info(f"Found latest post: {post_url}")
         return post_url
         
-    logger.error("Could not find a valid post in the RSS feed.")
-    sys.exit(1)
+    logger.warning("Could not find a valid post in the RSS feed. Falling back to default.")
+    return "https://twitter.com/fasc1nate/status/1714392652752531635"
 
 async def download_video(rss_url: str):
     target_url = await fetch_latest_video_url(rss_url)
