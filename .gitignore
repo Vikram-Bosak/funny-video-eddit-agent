@@ -1,0 +1,10 @@
+venv/
+downloads/
+exports/
+audio/
+memory.db
+*.onnx
+*.json
+__pycache__/
+.env
+.DS_Store
