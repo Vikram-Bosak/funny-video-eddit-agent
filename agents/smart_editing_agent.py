@@ -41,8 +41,9 @@ async def edit_video():
             "ffmpeg", "-y",
             "-stream_loop", "-1", "-i", temp_video,  # Loop video if shorter than audio
             "-i", voiceover_path,
-            "-c:v", "copy",
+            "-c:v", "libx264",
             "-c:a", "aac",
+            "-pix_fmt", "yuv420p",
             "-map", "0:v:0",
             "-map", "1:a:0",
             "-shortest",  # Stop encoding when the shortest stream ends (audio)
