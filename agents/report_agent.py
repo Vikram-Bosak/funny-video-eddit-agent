@@ -34,10 +34,20 @@ async def send_report():
     
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.post(webhook_url, json={"content": report_message})
+            final_video_path = memory.final_video_path
+            if final_video_path and os.path.exists(final_video_path):
+                # Send with video attachment
+                with open(final_video_path, "rb") as f:
+                    files = {"file": (os.path.basename(final_video_path), f, "video/mp4")}
+                    data = {"content": report_message}
+                    response = await client.post(webhook_url, data=data, files=files)
+            else:
+                # Send text only
+                response = await client.post(webhook_url, json={"content": report_message})
+                
             response.raise_for_status()
             
-        logger.success("Report sent to Discord successfully.")
+        logger.success("Report and video sent to Discord successfully.")
     except Exception as e:
         logger.error(f"Error sending report to Discord: {e}")
         sys.exit(1)
