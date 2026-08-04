@@ -1,0 +1,69 @@
+name: AI Video Automation Pipeline (Local AI)
+
+on:
+  workflow_dispatch:
+    inputs:
+      nitter_rss_url:
+        description: 'URL of the Nitter RSS feed (e.g. https://nitter.net/elonmusk/rss)'
+        required: true
+        type: string
+
+jobs:
+  run-agents:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install System Dependencies
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg libsm6 libxext6 wget
+
+      - name: Install Python Dependencies
+        run: pip install -r requirements.txt
+
+      # Downloader Agent
+      - name: Run Downloader Agent
+        env:
+          NITTER_RSS_URL: ${{ github.event.inputs.nitter_rss_url }}
+        run: python agents/downloader_agent.py
+
+      # Video Analysis Agent
+      - name: Run Video Analysis Agent
+        run: python agents/video_analysis_agent.py
+
+      # Script Writer Agent
+      - name: Run Script Writer Agent
+        run: python agents/script_writer_agent.py
+
+      # Voice Generation Agent
+      - name: Run Voice Generation Agent
+        run: python agents/voice_generation_agent.py
+
+      # Smart Editing Agent
+      - name: Run Smart Editing Agent
+        run: python agents/smart_editing_agent.py
+
+      # Upload Agent
+      - name: Run Upload Agent
+        env:
+          GDRIVE_SERVICE_ACCOUNT_JSON: ${{ secrets.GDRIVE_SERVICE_ACCOUNT_JSON }}
+        run: python agents/upload_agent.py
+
+      # Report Agent
+      - name: Run Report Agent
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: python agents/report_agent.py
+
+      # Save Final Memory Artifact (for debugging)
+      - name: Upload Memory SQLite Database
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: memory-database
+          path: memory.db
