@@ -57,7 +57,7 @@ jobs:
       # Report Agent
       - name: Run Report Agent
         env:
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          DISCORD_WEBHOOK_URL: "https://discord.com/api/webhooks/1534270012615823552/Ak6b_grjvbhddahvEpVqdo0p0XenSigMNZ8Gv0L_lwduB5petmXZFDpypmegA6XovOB9"
         run: python agents/report_agent.py
 
       # Save Final Memory Artifact (for debugging)
