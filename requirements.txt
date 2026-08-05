@@ -18,3 +18,6 @@ google-auth-httplib2
 google-auth-oauthlib
 openai
 feedparser
+kokoro-onnx
+soundfile
+onnxruntime
