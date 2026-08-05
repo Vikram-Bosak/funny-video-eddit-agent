@@ -251,7 +251,7 @@ async def edit_video():
             t2_plus_d2_ms = int((t2 + d2) * 1000)
             
             filter_complex = (
-                f"[2:a]apad=whole_dur={T}[vo_padded];"
+                f"[2:a]apad[vo_padded];"
                 f"[1:a]atrim=start={crop_start + t1}:end={crop_start + t1 + d1},asetpts=PTS-STARTPTS,adelay={t1_ms}|{t1_ms}[orig_seg1];"
                 f"[1:a]atrim=start={crop_start + t2}:end={crop_start + t2 + d2},asetpts=PTS-STARTPTS,adelay={t2_ms}|{t2_ms}[orig_seg2];"
                 f"[vo_padded]atrim=start=0:end={t1},asetpts=PTS-STARTPTS[v_piece1];"
