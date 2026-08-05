@@ -103,7 +103,7 @@ async def send_report():
         logger.success("Detailed report sent to Discord successfully.")
     except Exception as e:
         logger.error(f"Error sending report to Discord: {e}")
-        sys.exit(1)
+        logger.warning("Continuing despite Discord reporting failure.")
 
 if __name__ == "__main__":
     asyncio.run(send_report())

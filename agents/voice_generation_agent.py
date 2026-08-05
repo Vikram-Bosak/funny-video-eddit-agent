@@ -24,29 +24,34 @@ async def generate_voice():
     voiceover_path = f"audio/{video_id}_voice.wav"
     
     try:
-        # Download a tiny Piper model if not exists
-        model_name = "en_US-lessac-low.onnx"
-        model_url = f"https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/low/{model_name}"
+        model_file = "kokoro-v1.0.onnx"
+        voices_file = "voices-v1.0.bin"
         
-        if not os.path.exists(model_name):
-            logger.info(f"Downloading piper model {model_name}...")
-            subprocess.run(["wget", "-q", model_url], check=True)
-            subprocess.run(["wget", "-q", f"{model_url}.json"], check=True)
+        # Download files if they do not exist
+        import urllib.request
+        if not os.path.exists(model_file):
+            logger.info(f"Downloading {model_file} (approx. 82MB)...")
+            url = f"https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/{model_file}"
+            urllib.request.urlretrieve(url, model_file)
             
-        # Run piper via CLI
-        # echo "text" | piper --model en_US-lessac-low.onnx --output_file out.wav
-        process = subprocess.Popen(['piper', '--model', model_name, '--output_file', voiceover_path], 
-                                   stdin=subprocess.PIPE, 
-                                   stdout=subprocess.PIPE, 
-                                   stderr=subprocess.PIPE)
-        stdout, stderr = process.communicate(input=script.encode('utf-8'))
+        if not os.path.exists(voices_file):
+            logger.info(f"Downloading {voices_file} (approx. 20MB)...")
+            url = f"https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/{voices_file}"
+            urllib.request.urlretrieve(url, voices_file)
+            
+        from kokoro_onnx import Kokoro
+        import soundfile as sf
         
-        if process.returncode != 0:
-            logger.error(f"Piper error: {stderr.decode()}")
-            raise Exception("Piper TTS failed")
-            
+        logger.info("Initializing Kokoro TTS model...")
+        kokoro = Kokoro(model_file, voices_file)
+        
+        logger.info("Synthesizing speech with Eric voice (am_eric)...")
+        samples, sample_rate = kokoro.create(script, voice="am_eric", speed=1.0, lang="en-us")
+        
+        sf.write(voiceover_path, samples, sample_rate)
+        
         await async_update_memory(video_id, {"voiceover_file": voiceover_path})
-        logger.success("Voice generation complete.")
+        logger.success("Voice generation via Kokoro complete.")
         
     except Exception as e:
         logger.error(f"Error during voice generation: {e}")

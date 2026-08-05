@@ -41,15 +41,16 @@ async def write_script():
     )
     
     prompt = f"""
-    You are an expert, highly engaging YouTube/TikTok scriptwriter.
-    Write a short, funny, and energetic voiceover script for a viral video based on this data:
+    You are an expert, highly engaging US YouTube/TikTok scriptwriter.
+    Write a short, funny, and energetic voiceover script for a viral video specifically targeting a United States (US) audience:
     
     1. Spoken words in the video: {transcript}
     2. Text visible on screen (OCR): {ocr_text}
     3. Objects detected in the video: {objects_str}
     
     Requirements:
-    - The tone must be exciting and humorous.
+    - Write the script in engaging American English, utilizing US slang, idioms, and humor where appropriate.
+    - The tone must be exciting, witty, and highly relatable to US social media viewers.
     - Don't use placeholders. Write the exact words to be spoken.
     - Keep it under 60 seconds (around 100-150 words).
     - Do not include stage directions or visual cues, ONLY the spoken words.
