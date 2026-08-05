@@ -3,10 +3,42 @@ import sys
 import json
 import asyncio
 from loguru import logger
-from google.oauth2 import service_account
+from google.oauth2.credentials import Credentials
+from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 from memory_agent import async_get_latest_video_id, async_get_memory, async_update_memory
+from dotenv import load_dotenv
+
+load_dotenv()
+
+def get_oauth_credentials():
+    scopes = ['https://www.googleapis.com/auth/drive']
+    token_str = os.environ.get("GDRIVE_OAUTH_TOKEN")
+    
+    if token_str:
+        logger.info("Loading Google Drive OAuth credentials from environment variable...")
+        try:
+            token_data = json.loads(token_str)
+            creds = Credentials.from_authorized_user_info(token_data, scopes)
+            if creds and creds.expired and creds.refresh_token:
+                creds.refresh(Request())
+            return creds
+        except Exception as e:
+            logger.error(f"Failed to parse GDRIVE_OAUTH_TOKEN: {e}")
+            
+    # Local fallback
+    if os.path.exists("token.json"):
+        logger.info("Loading Google Drive OAuth credentials from token.json...")
+        try:
+            creds = Credentials.from_authorized_user_file("token.json", scopes)
+            if creds and creds.expired and creds.refresh_token:
+                creds.refresh(Request())
+            return creds
+        except Exception as e:
+            logger.error(f"Failed to load token.json: {e}")
+            
+    return None
 
 async def upload_video():
     video_id = await async_get_latest_video_id()
@@ -23,21 +55,16 @@ async def upload_video():
         
     logger.info(f"Uploading video {final_video} to Google Drive...")
     
-    creds_json_str = os.environ.get("GDRIVE_SERVICE_ACCOUNT_JSON")
     folder_id = os.environ.get("GDRIVE_FOLDER_ID")
+    creds = get_oauth_credentials()
     
-    if not creds_json_str:
-        logger.warning("GDRIVE_SERVICE_ACCOUNT_JSON not set. Skipping upload.")
+    if not creds:
+        logger.warning("Google Drive OAuth credentials not found. Skipping upload.")
         await async_update_memory(video_id, {"google_drive_public_url": "https://drive.google.com/local-test-no-creds"})
         return
         
     try:
         def do_upload():
-            creds_dict = json.loads(creds_json_str)
-            creds = service_account.Credentials.from_service_account_info(
-                creds_dict, scopes=['https://www.googleapis.com/auth/drive.file']
-            )
-            
             service = build('drive', 'v3', credentials=creds)
             file_metadata = {'name': f'{video_id}_final.mp4'}
             if folder_id:

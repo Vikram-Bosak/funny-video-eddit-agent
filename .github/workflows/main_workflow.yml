@@ -59,7 +59,7 @@ jobs:
       # Upload Agent
       - name: Run Upload Agent
         env:
-          GDRIVE_SERVICE_ACCOUNT_JSON: ${{ secrets.GDRIVE_SERVICE_ACCOUNT_JSON }}
+          GDRIVE_OAUTH_TOKEN: ${{ secrets.GDRIVE_OAUTH_TOKEN }}
           GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID || '1yvO0w9wiM5HrrhHgvQngKElxYS0G92BG' }}
         run: python agents/upload_agent.py
 
