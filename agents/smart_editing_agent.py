@@ -294,7 +294,11 @@ async def edit_video():
             final_video_path
         ])
         
-        subprocess.run(command, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        res = subprocess.run(command, capture_output=True, text=True)
+        if res.returncode != 0:
+            logger.error(f"FFmpeg failed with exit code {res.returncode}")
+            logger.error(f"FFmpeg stderr: {res.stderr}")
+            raise Exception(f"FFmpeg error: {res.stderr}")
         
         # Cleanup temp
         if os.path.exists(temp_video):
