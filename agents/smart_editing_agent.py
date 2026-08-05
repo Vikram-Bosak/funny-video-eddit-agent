@@ -251,12 +251,12 @@ async def edit_video():
             t2_plus_d2_ms = int((t2 + d2) * 1000)
             
             filter_complex = (
-                f"[2:a]apad[vo_padded];"
+                f"[2:a]apad,asplit=3[vo_p1][vo_p2][vo_p3];"
                 f"[1:a]atrim=start={crop_start + t1}:end={crop_start + t1 + d1},asetpts=PTS-STARTPTS,adelay={t1_ms}|{t1_ms}[orig_seg1];"
                 f"[1:a]atrim=start={crop_start + t2}:end={crop_start + t2 + d2},asetpts=PTS-STARTPTS,adelay={t2_ms}|{t2_ms}[orig_seg2];"
-                f"[vo_padded]atrim=start=0:end={t1},asetpts=PTS-STARTPTS[v_piece1];"
-                f"[vo_padded]atrim=start={t1}:end={t2 - d1},asetpts=PTS-STARTPTS,adelay={t1_plus_d1_ms}|{t1_plus_d1_ms}[v_piece2];"
-                f"[vo_padded]atrim=start={t2 - d1}:end={T},asetpts=PTS-STARTPTS,adelay={t2_plus_d2_ms}|{t2_plus_d2_ms}[v_piece3];"
+                f"[vo_p1]atrim=start=0:end={t1},asetpts=PTS-STARTPTS[v_piece1];"
+                f"[vo_p2]atrim=start={t1}:end={t2 - d1},asetpts=PTS-STARTPTS,adelay={t1_plus_d1_ms}|{t1_plus_d1_ms}[v_piece2];"
+                f"[vo_p3]atrim=start={t2 - d1}:end={T},asetpts=PTS-STARTPTS,adelay={t2_plus_d2_ms}|{t2_plus_d2_ms}[v_piece3];"
                 f"[orig_seg1][orig_seg2][v_piece1][v_piece2][v_piece3]amix=inputs=5:normalize=0[final_audio]"
             )
             
