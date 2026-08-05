@@ -185,7 +185,7 @@ async def edit_video():
     final_video_path = f"exports/{video_id}_final.mp4"
     
     try:
-        # 1. Crop video to 9:16, seek to crop_start, set crop_duration, and apply regional blurs
+        # 1. Crop video to 9:16, seek to crop_start, set crop_duration
         crop_start = memory.crop_start if memory.crop_start is not None else 0.0
         crop_duration = memory.crop_duration if memory.crop_duration is not None else 59.0
         
@@ -195,7 +195,7 @@ async def edit_video():
             "-ss", str(crop_start),
             "-t", str(crop_duration),
             "-i", video_path,
-            "-vf", "crop=ih*(9/16):ih:(iw-ih*(9/16))/2:0,split=3[main][top][bottom];[top]crop=iw:100:0:0,boxblur=luma_radius=15:luma_power=3[top_b];[bottom]crop=iw:240:0:ih-240,boxblur=luma_radius=15:luma_power=3[bottom_b];[main][top_b]overlay=0:0[tmp];[tmp][bottom_b]overlay=0:H-240",
+            "-vf", "crop=ih*(9/16):ih:(iw-ih*(9/16))/2:0",
             "-c:v", "libx264",
             "-an",
             temp_video
