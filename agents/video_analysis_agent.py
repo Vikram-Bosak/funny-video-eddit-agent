@@ -108,10 +108,8 @@ async def analyze_video():
         
         summary_prompt = f"""
         You are an AI video summarizer.
-        Analyze this video content and write a short, clear, and comprehensive summary (2-3 sentences) in English.
+        Analyze this video content and write a short, clear, and comprehensive summary (2-3 sentences) in English describing the actual events, actions, and settings shown in the video.
         
-        Video Title: {memory.original_title or "N/A"}
-        Video Description: {memory.original_description or "N/A"}
         Dialogue Transcript: {raw_transcript}
         OCR Text (visible on screen): {ocr_str}
         Detected Objects: {objects_str}

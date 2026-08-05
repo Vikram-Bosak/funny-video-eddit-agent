@@ -17,8 +17,6 @@ async def write_script():
     transcript = memory.transcript or "No spoken words detected."
     ocr_text = memory.ocr_text or "No text detected."
     video_summary = memory.summary or "No visual summary available."
-    original_title = memory.original_title or "N/A"
-    original_description = memory.original_description or "N/A"
     
     # Parse scene analysis to extract detected objects
     objects_detected = set()
@@ -47,9 +45,7 @@ async def write_script():
     You are an expert, highly engaging US social media scriptwriter and storyteller.
     Write a short, funny, and energetic voiceover script for a viral video that is DIRECTLY and TIGHTLY aligned with the actual visual content of the video.
     
-    Here is the metadata and analysis of the video content:
-    - Video Title: {original_title}
-    - Video Description: {original_description}
+    Here is the analysis of the video content:
     - Visual Scene Summary: {video_summary}
     - Detected Objects: {objects_str}
     - Spoken Words / Original Dialogue: {transcript}
