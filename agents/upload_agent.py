@@ -62,19 +62,25 @@ async def upload_video():
         api_key=api_key
     )
     
-    system_instruction = "You are a professional social media manager. Your task is to output a single SEO snake_case title for the video based on the user's content description. Output ONLY the filename, entirely in lowercase, using underscores instead of spaces, with no other text, explanation, prefix, quotes, or file extension."
-    user_content = f"Visual Summary: {memory.summary}\nOCR Text: {memory.ocr_text}\nTranscript: {memory.transcript}"
+    prompt = f"""Generate a short 3-5 word snake_case filename in lowercase for this video.
+Do not include any explanation, intro, or extra text. Output ONLY the raw filename.
+
+Video details:
+Summary: {memory.summary}
+Transcript: {memory.transcript}
+
+Example: "funny_cat_slip", "crazy_bike_crash", "epic_skateboard_fail"
+"""
     
     clean_filename = f"{video_id}_final.mp4"
     try:
         def query_llm():
             completion = client.chat.completions.create(
-              model="nvidia/nemotron-3-ultra-550b-a55b",
+              model="meta/llama-3.1-70b-instruct",
               messages=[
-                  {"role": "system", "content": system_instruction},
-                  {"role": "user", "content": user_content}
+                  {"role": "user", "content": prompt}
               ],
-              temperature=0.3,
+              temperature=0.1,
               max_tokens=30,
               stream=False
             )
