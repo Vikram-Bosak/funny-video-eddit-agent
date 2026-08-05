@@ -40,6 +40,8 @@ def get_oauth_credentials():
             
     return None
 
+from openai import OpenAI
+
 async def upload_video():
     video_id = await async_get_latest_video_id()
     if not video_id:
@@ -52,6 +54,58 @@ async def upload_video():
     if not final_video:
         logger.error("Final video path not found in memory.")
         sys.exit(1)
+        
+    # Generate meaningful title filename using NVIDIA Nemotron LLM
+    api_key = os.environ.get("NVIDIA_API_KEY", "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")
+    client = OpenAI(
+        base_url="https://integrate.api.nvidia.com/v1",
+        api_key=api_key
+    )
+    
+    prompt = f"""
+    You are an expert social media SEO manager. Analyze the following video content details.
+    Generate a single, highly descriptive, and search-friendly title for the video.
+    The title must be 3-6 words long, entirely lowercase, and use underscores instead of spaces. Do not use quotes or file extensions.
+    Examples: "funny_cat_jump_fail", "gym_weightlifter_epic_fail", "hilarious_baby_prank".
+    
+    Visual Summary: {memory.summary}
+    OCR Text: {memory.ocr_text}
+    Transcript: {memory.transcript}
+    
+    Reply with ONLY the generated snake_case filename. Do not output anything else.
+    """
+    
+    clean_filename = f"{video_id}_final.mp4"
+    try:
+        def query_llm():
+            completion = client.chat.completions.create(
+              model="nvidia/nemotron-3-ultra-550b-a55b",
+              messages=[{"role":"user","content": prompt}],
+              temperature=0.3,
+              max_tokens=30,
+              stream=False
+            )
+            return completion.choices[0].message.content.strip().lower()
+        res = await asyncio.to_thread(query_llm)
+        # Clean response to ensure it is valid snake_case filename
+        res = "".join(c if c.isalnum() or c == "_" else "" for c in res.replace(" ", "_"))
+        res = res.strip("_")
+        if res:
+            clean_filename = f"{res}.mp4"
+            logger.info(f"Generated SEO filename: {clean_filename}")
+    except Exception as e:
+        logger.warning(f"Failed to generate SEO filename, using default: {e}")
+        
+    # Rename local file to match the new filename
+    new_video_path = os.path.join(os.path.dirname(final_video), clean_filename)
+    try:
+        if os.path.exists(final_video):
+            os.rename(final_video, new_video_path)
+            final_video = new_video_path
+            await async_update_memory(video_id, {"final_video_path": final_video})
+            logger.info(f"Renamed local video to: {final_video}")
+    except Exception as e:
+        logger.warning(f"Failed to rename local video: {e}")
         
     logger.info(f"Uploading video {final_video} to Google Drive...")
     
@@ -66,7 +120,7 @@ async def upload_video():
     try:
         def do_upload():
             service = build('drive', 'v3', credentials=creds)
-            file_metadata = {'name': f'{video_id}_final.mp4'}
+            file_metadata = {'name': clean_filename}
             if folder_id:
                 file_metadata['parents'] = [folder_id]
                 
