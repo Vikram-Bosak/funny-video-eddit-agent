@@ -10,6 +10,8 @@ on:
         description: 'URL of the Nitter RSS feed (e.g. https://nitter.net/elonmusk/rss)'
         required: false
         type: string
+  schedule:
+    - cron: '0 */2 * * *'
 
 jobs:
   run-agents:
@@ -68,6 +70,7 @@ jobs:
 
       # Report Agent
       - name: Run Report Agent
+        if: always()
         env:
           DISCORD_WEBHOOK_URL: "https://discord.com/api/webhooks/1534270008241426624/XczwalKI8oizscF9zR7v8dGzz7ovdkeNYr3nATitaZTb-IqLX8HfB1HNvd5QhA9pO0b0"
         run: python agents/report_agent.py

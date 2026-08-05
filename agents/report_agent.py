@@ -50,10 +50,20 @@ async def send_report():
     drive_url = memory.google_drive_public_url or 'N/A'
     source_url = memory.source_url or 'N/A'
     
+    has_failed = memory.error is not None and memory.error != ""
+    if has_failed:
+        embed_title = "❌ AI Video Automation Pipeline Failed!"
+        embed_desc = f"The pipeline encountered an error: **{truncate_str(memory.error, 300)}**"
+        embed_color = 15158332  # Red color code
+    else:
+        embed_title = "🚀 AI Video Automation Pipeline Completed!"
+        embed_desc = "The video editing pipeline has finished executing successfully."
+        embed_color = 5763719  # Green color code
+        
     embed = {
-        "title": "🚀 AI Video Automation Pipeline Completed!",
-        "description": "The video editing pipeline has finished executing successfully.",
-        "color": 5763719,  # Green color code
+        "title": embed_title,
+        "description": embed_desc,
+        "color": embed_color,
         "fields": [
             {
                 "name": "📥 1. Downloaded Video Info",
