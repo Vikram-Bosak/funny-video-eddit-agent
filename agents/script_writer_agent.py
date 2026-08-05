@@ -16,6 +16,9 @@ async def write_script():
     
     transcript = memory.transcript or "No spoken words detected."
     ocr_text = memory.ocr_text or "No text detected."
+    video_summary = memory.summary or "No visual summary available."
+    original_title = memory.original_title or "N/A"
+    original_description = memory.original_description or "N/A"
     
     # Parse scene analysis to extract detected objects
     objects_detected = set()
@@ -32,7 +35,7 @@ async def write_script():
     
     # Use Environment Variable or fallback to the provided key
     api_key = os.environ.get("NVIDIA_API_KEY", "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")
-
+ 
     logger.info("Generating script using NVIDIA Nemotron LLM...")
     
     client = OpenAI(
@@ -41,19 +44,23 @@ async def write_script():
     )
     
     prompt = f"""
-    You are an expert, highly engaging US YouTube/TikTok scriptwriter.
-    Write a short, funny, and energetic voiceover script for a viral video specifically targeting a United States (US) audience:
+    You are an expert, highly engaging US social media scriptwriter and storyteller.
+    Write a short, funny, and energetic voiceover script for a viral video that is DIRECTLY and TIGHTLY aligned with the actual visual content of the video.
     
-    1. Spoken words in the video: {transcript}
-    2. Text visible on screen (OCR): {ocr_text}
-    3. Objects detected in the video: {objects_str}
+    Here is the metadata and analysis of the video content:
+    - Video Title: {original_title}
+    - Video Description: {original_description}
+    - Visual Scene Summary: {video_summary}
+    - Detected Objects: {objects_str}
+    - Spoken Words / Original Dialogue: {transcript}
+    - On-screen Text (OCR): {ocr_text}
     
-    Requirements:
-    - Write the script in engaging American English, utilizing US slang, idioms, and humor where appropriate.
-    - The tone must be exciting, witty, and highly relatable to US social media viewers.
-    - Don't use placeholders. Write the exact words to be spoken.
-    - Keep it under 60 seconds (around 100-150 words).
-    - Do not include stage directions or visual cues, ONLY the spoken words.
+    CRITICAL INSTRUCTIONS:
+    1. The voiceover script MUST match the visuals described in the Visual Scene Summary and Detected Objects. For example, if the video shows a person playing with cats, the script must talk about cats/playing/the interaction shown. Do NOT hallucinate an unrelated story.
+    2. If the original dialogue is empty ("No dialogue detected" or "No spoken words"), write a completely new, engaging story or commentary describing the funny, exciting, or interesting actions happening in the video.
+    3. If there is original dialogue, do not use it raw. Instead, rewrite it to be more natural, engaging, and better suited for viral storytelling, while keeping the same meaning and matching the video's context.
+    4. Write only the spoken script in engaging English. Do not include stage directions, speaker names, brackets, or visual cues. Write only the exact words to be spoken.
+    5. Keep it under 60 seconds (around 80-120 words maximum).
     """
     
     try:
