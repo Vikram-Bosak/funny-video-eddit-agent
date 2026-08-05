@@ -62,25 +62,18 @@ async def upload_video():
         api_key=api_key
     )
     
-    prompt = f"""
-    You are an expert social media SEO manager. Analyze the following video content details.
-    Generate a single, highly descriptive, and search-friendly title for the video.
-    The title must be 3-6 words long, entirely lowercase, and use underscores instead of spaces. Do not use quotes or file extensions.
-    Examples: "funny_cat_jump_fail", "gym_weightlifter_epic_fail", "hilarious_baby_prank".
-    
-    Visual Summary: {memory.summary}
-    OCR Text: {memory.ocr_text}
-    Transcript: {memory.transcript}
-    
-    Reply with ONLY the generated snake_case filename. Do not output anything else.
-    """
+    system_instruction = "You are a professional social media manager. Your task is to output a single SEO snake_case title for the video based on the user's content description. Output ONLY the filename, entirely in lowercase, using underscores instead of spaces, with no other text, explanation, prefix, quotes, or file extension."
+    user_content = f"Visual Summary: {memory.summary}\nOCR Text: {memory.ocr_text}\nTranscript: {memory.transcript}"
     
     clean_filename = f"{video_id}_final.mp4"
     try:
         def query_llm():
             completion = client.chat.completions.create(
               model="nvidia/nemotron-3-ultra-550b-a55b",
-              messages=[{"role":"user","content": prompt}],
+              messages=[
+                  {"role": "system", "content": system_instruction},
+                  {"role": "user", "content": user_content}
+              ],
               temperature=0.3,
               max_tokens=30,
               stream=False
@@ -90,6 +83,13 @@ async def upload_video():
         # Clean response to ensure it is valid snake_case filename
         res = "".join(c if c.isalnum() or c == "_" else "" for c in res.replace(" ", "_"))
         res = res.strip("_")
+        
+        # Programmatic guardrail: limit to maximum 6 words
+        words = [w for w in res.split("_") if w]
+        if len(words) > 6:
+            words = words[:5]
+        res = "_".join(words)
+        
         if res:
             clean_filename = f"{res}.mp4"
             logger.info(f"Generated SEO filename: {clean_filename}")
