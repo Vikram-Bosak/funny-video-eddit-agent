@@ -39,6 +39,13 @@ def save_history(url: str):
         logger.warning(f"Git commit/push for history tracking failed: {e}")
 
 async def is_video_funny(title: str, description: str) -> bool:
+    content_lower = (title + " " + description).lower()
+    funny_keywords = ["funny", "fail", "comedy", "hilarious", "laugh", "prank", "meme", "lmao", "lol", "unexpected", "joke", "crazy"]
+    
+    if any(kw in content_lower for kw in funny_keywords):
+        logger.info(f"Funniness verified by local keyword match: '{title}'")
+        return True
+        
     api_key = os.environ.get("NVIDIA_API_KEY", "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")
     client = OpenAI(
         base_url="https://integrate.api.nvidia.com/v1",
@@ -51,7 +58,7 @@ async def is_video_funny(title: str, description: str) -> bool:
     Video Title: {title}
     Video Description: {description}
     
-    Reply with ONLY the word "YES" if it is funny/humorous, or "NO" if it is serious, political, educational, news-related, or general spam. Do not explain your reasoning.
+    Is this video funny/humorous? Answer YES or NO.
     """
     try:
         def query():
@@ -59,13 +66,16 @@ async def is_video_funny(title: str, description: str) -> bool:
               model="nvidia/nemotron-3-ultra-550b-a55b",
               messages=[{"role":"user","content": prompt}],
               temperature=0.1,
-              max_tokens=5,
+              max_tokens=20,
               stream=False
             )
             return completion.choices[0].message.content.strip().upper()
         res = await asyncio.to_thread(query)
-        logger.info(f"Humor Check result for '{title}': {res}")
-        return "YES" in res
+        logger.info(f"LLM humor check result for '{title}': {res}")
+        # Return True unless the LLM explicitly says NO
+        if "NO" in res and "YES" not in res:
+            return False
+        return True
     except Exception as e:
         logger.warning(f"Humor check failed, defaulting to True: {e}")
         return True
