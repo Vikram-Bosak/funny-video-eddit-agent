@@ -63,8 +63,8 @@ def generate_ass_subtitles(voiceover_path: str, ass_path: str):
         
         f.write("[V4+ Styles]\n")
         f.write("Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n")
-        # Opaque box background (BorderStyle=3) with solid black background to cover underlying text/watermarks
-        f.write("Style: Default,Arial Black,64,&H00FFFFFF,&H00000000,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,3,4,1,2,10,10,580,1\n\n")
+        # Solid White primary color (&H00FFFFFF), thick black outline (Outline=4), lower-middle vertical positioning (MarginV=580)
+        f.write("Style: Default,Arial Black,64,&H00FFFFFF,&H00000000,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,4,1,2,10,10,580,1\n\n")
         
         f.write("[Events]\n")
         f.write("Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n")
@@ -185,12 +185,12 @@ async def edit_video():
     final_video_path = f"exports/{video_id}_final.mp4"
     
     try:
-        # 1. Crop video to 9:16 and overlay black bars to cover original text/captions/watermarks
-        logger.info("Cropping video and applying background overlays...")
+        # 1. Crop video to 9:16 and apply regional blurs to completely cover top/bottom text and watermarks
+        logger.info("Cropping video and applying regional blurs...")
         crop_command = [
             "ffmpeg", "-y",
             "-i", video_path,
-            "-vf", "crop=ih*(9/16):ih:(iw-ih*(9/16))/2:0,drawbox=y=ih-200:color=black@0.7:width=iw:height=200:t=fill,drawbox=y=0:color=black@0.7:width=iw:height=100:t=fill",
+            "-vf", "crop=ih*(9/16):ih:(iw-ih*(9/16))/2:0,split=3[main][top][bottom];[top]crop=iw:100:0:0,boxblur=luma_radius=15:luma_power=3[top_b];[bottom]crop=iw:240:0:ih-240,boxblur=luma_radius=15:luma_power=3[bottom_b];[main][top_b]overlay=0:0[tmp];[tmp][bottom_b]overlay=0:H-240",
             "-c:v", "libx264",
             "-an",
             temp_video
