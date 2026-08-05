@@ -138,13 +138,68 @@ async def analyze_video():
             logger.warning(f"Summarization failed: {e}")
             summary_text = "Summary generation failed."
         
+        # Get video duration
+        cap = cv2.VideoCapture(video_path)
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        video_duration = total_frames / fps if fps > 0 else 0
+        cap.release()
+        logger.info(f"Video duration: {video_duration:.2f} seconds")
+        
+        # Determine crop timestamps (max 59 seconds)
+        crop_start = 0.0
+        crop_duration = min(59.0, video_duration)
+        
+        if video_duration > 59.0:
+            logger.info("Video is longer than 59s. Requesting AI to find the most funny portion...")
+            select_prompt = f"""
+            You are an expert social media editor. Analyze this video timeline data and select the single most funny, engaging, or viral continuous portion of the video.
+            The selected portion MUST be at most 59 seconds long.
+            
+            Total Video Duration: {video_duration:.2f} seconds
+            
+            Timeline and Scene Analysis:
+            {json.dumps(scene_analysis[:20], indent=2)}
+            
+            Transcript with Timestamps:
+            {raw_transcript[:2000]}
+            
+            OCR Text (visible on screen): {ocr_str[:1000]}
+            
+            Identify the start time and duration of the best funny segment to crop.
+            Return ONLY a valid JSON object with keys "start_time" and "duration" (in seconds as floats/integers). Example response:
+            {{"start_time": 15.2, "duration": 45.0}}
+            Do not output any explanation or extra text.
+            """
+            try:
+                llm_response = await asyncio.to_thread(run_llm, select_prompt)
+                logger.info(f"AI selection response: {llm_response}")
+                import json
+                clean_json = llm_response.replace("```json", "").replace("```", "").strip()
+                data = json.loads(clean_json)
+                crop_start = float(data.get("start_time", 0.0))
+                crop_duration = float(data.get("duration", 59.0))
+                # Validate bounds
+                if crop_start < 0 or crop_start >= video_duration:
+                    crop_start = 0.0
+                if crop_duration <= 0 or crop_duration > 59.0 or (crop_start + crop_duration) > video_duration:
+                    crop_duration = min(59.0, video_duration - crop_start)
+            except Exception as e:
+                logger.warning(f"Failed to parse AI selection, defaulting to first 59s: {e}")
+                crop_start = 0.0
+                crop_duration = min(59.0, video_duration)
+
+        logger.info(f"Selected crop window: start={crop_start:.2f}s, duration={crop_duration:.2f}s")
+        
         # Save results
         await async_update_memory(video_id, {
             "scene_analysis": scene_analysis,
             "transcript": raw_transcript,
             "translation": translation_text,
             "summary": summary_text,
-            "ocr_text": ocr_str
+            "ocr_text": ocr_str,
+            "crop_start": crop_start,
+            "crop_duration": crop_duration
         })
         
         logger.success("Video analysis complete.")

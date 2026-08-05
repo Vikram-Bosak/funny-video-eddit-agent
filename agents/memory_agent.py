@@ -30,6 +30,8 @@ class MemoryModel(BaseModel):
     github_repository: Optional[str] = None
     github_run_id: Optional[str] = None
     github_run_url: Optional[str] = None
+    crop_start: Optional[float] = None
+    crop_duration: Optional[float] = None
     error: Optional[str] = None
 
 def init_db():
@@ -56,6 +58,8 @@ def init_db():
             github_repository TEXT,
             github_run_id TEXT,
             github_run_url TEXT,
+            crop_start REAL,
+            crop_duration REAL,
             error TEXT
         )
     ''')
