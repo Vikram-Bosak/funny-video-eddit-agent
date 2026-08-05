@@ -33,7 +33,15 @@ def save_history(url: str):
         subprocess.run(["git", "config", "user.email", "agent@ai.com"], check=True)
         subprocess.run(["git", "add", HISTORY_FILE], check=True)
         subprocess.run(["git", "commit", "-m", f"Track processed video: {url}"], check=True)
-        subprocess.run(["git", "push", "origin", "main"], check=True)
+        
+        pat = os.environ.get("GH_TOKEN")
+        if pat:
+            repo = os.environ.get("GITHUB_REPOSITORY", "Vikram-Bosak/funny-video-eddit-agent")
+            push_url = f"https://{pat}@github.com/{repo}.git"
+            subprocess.run(["git", "push", push_url, "main"], check=True)
+        else:
+            subprocess.run(["git", "push", "origin", "main"], check=True)
+            
         logger.info(f"Successfully committed and pushed {HISTORY_FILE} updates.")
     except Exception as e:
         logger.warning(f"Git commit/push for history tracking failed: {e}")

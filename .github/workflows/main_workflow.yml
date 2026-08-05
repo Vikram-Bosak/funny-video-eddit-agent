@@ -14,6 +14,8 @@ on:
 jobs:
   run-agents:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     env:
       NVIDIA_API_KEY: "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"
       GITHUB_REPOSITORY: ${{ github.repository }}
@@ -38,6 +40,7 @@ jobs:
       - name: Run Downloader Agent
         env:
           NITTER_RSS_URL: ${{ github.event.inputs.nitter_rss_url }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: python agents/downloader_agent.py
 
       # Video Analysis Agent
