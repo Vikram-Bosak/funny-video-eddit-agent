@@ -11,6 +11,11 @@ on:
 jobs:
   run-agents:
     runs-on: ubuntu-latest
+    env:
+      NVIDIA_API_KEY: "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"
+      GITHUB_REPOSITORY: ${{ github.repository }}
+      GITHUB_RUN_ID: ${{ github.run_id }}
+      GITHUB_SERVER_URL: ${{ github.server_url }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -57,7 +62,7 @@ jobs:
       # Report Agent
       - name: Run Report Agent
         env:
-          DISCORD_WEBHOOK_URL: "https://discord.com/api/webhooks/1534270012615823552/Ak6b_grjvbhddahvEpVqdo0p0XenSigMNZ8Gv0L_lwduB5petmXZFDpypmegA6XovOB9"
+          DISCORD_WEBHOOK_URL: "https://discord.com/api/webhooks/1534270008241426624/XczwalKI8oizscF9zR7v8dGzz7ovdkeNYr3nATitaZTb-IqLX8HfB1HNvd5QhA9pO0b0"
         run: python agents/report_agent.py
 
       # Save Final Memory Artifact (for debugging)

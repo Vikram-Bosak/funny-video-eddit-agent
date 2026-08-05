@@ -17,12 +17,19 @@ class MemoryModel(BaseModel):
     original_description: Optional[str] = None
     local_video_path: Optional[str] = None
     transcript: Optional[str] = None
+    translation: Optional[str] = None
+    summary: Optional[str] = None
     scene_analysis: Optional[str] = None  # JSON string
     ocr_text: Optional[str] = None
     generated_script: Optional[str] = None
     voiceover_file: Optional[str] = None
     final_video_path: Optional[str] = None
     google_drive_public_url: Optional[str] = None
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    github_repository: Optional[str] = None
+    github_run_id: Optional[str] = None
+    github_run_url: Optional[str] = None
     error: Optional[str] = None
 
 def init_db():
@@ -36,12 +43,19 @@ def init_db():
             original_description TEXT,
             local_video_path TEXT,
             transcript TEXT,
+            translation TEXT,
+            summary TEXT,
             scene_analysis TEXT,
             ocr_text TEXT,
             generated_script TEXT,
             voiceover_file TEXT,
             final_video_path TEXT,
             google_drive_public_url TEXT,
+            start_time TEXT,
+            end_time TEXT,
+            github_repository TEXT,
+            github_run_id TEXT,
+            github_run_url TEXT,
             error TEXT
         )
     ''')

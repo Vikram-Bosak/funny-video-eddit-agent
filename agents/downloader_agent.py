@@ -86,7 +86,8 @@ async def download_video(rss_url_arg: str = None):
             original_tweet_url = f"https://twitter.com/{username}/status/{tweet_id}"
             valid_videos.append({
                 "url": original_tweet_url,
-                "title": title
+                "title": title,
+                "description": desc
             })
             
     if not valid_videos:
@@ -120,11 +121,21 @@ async def download_video(rss_url_arg: str = None):
             if proc.returncode == 0 and os.path.exists(output_path):
                 logger.success(f"Download successful! Video ID: {video_id}")
                 
+                # HTML tag cleaning for description if needed, otherwise raw is fine
+                clean_desc = video["description"]
+                # A simple replacement to remove HTML tags from description
+                import re
+                clean_desc = re.sub('<[^<]+?>', '', clean_desc) if clean_desc else ""
+                
                 await async_update_memory(video_id, {
                     "source_url": target_url,
                     "original_title": video["title"],
-                    "original_description": "",
-                    "local_video_path": output_path
+                    "original_description": clean_desc,
+                    "local_video_path": output_path,
+                    "start_time": datetime.now(timezone.utc).isoformat(),
+                    "github_repository": os.environ.get("GITHUB_REPOSITORY"),
+                    "github_run_id": os.environ.get("GITHUB_RUN_ID"),
+                    "github_run_url": f"{os.environ.get('GITHUB_SERVER_URL', 'https://github.com')}/{os.environ.get('GITHUB_REPOSITORY')}/actions/runs/{os.environ.get('GITHUB_RUN_ID')}" if os.environ.get("GITHUB_RUN_ID") else None
                 })
                 return
             else:

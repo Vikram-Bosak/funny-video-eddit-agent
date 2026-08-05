@@ -3,6 +3,7 @@ import sys
 import asyncio
 import subprocess
 from loguru import logger
+from datetime import datetime, timezone
 import ffmpeg
 from memory_agent import async_get_latest_video_id, async_get_memory, async_update_memory
 
@@ -56,7 +57,10 @@ async def edit_video():
         if os.path.exists(temp_video):
             os.remove(temp_video)
             
-        await async_update_memory(video_id, {"final_video_path": final_video_path})
+        await async_update_memory(video_id, {
+            "final_video_path": final_video_path,
+            "end_time": datetime.now(timezone.utc).isoformat()
+        })
         logger.success("Video editing complete.")
         
     except Exception as e:

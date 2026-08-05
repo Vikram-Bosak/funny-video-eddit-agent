@@ -24,6 +24,8 @@ async def upload_video():
     logger.info(f"Uploading video {final_video} to Google Drive...")
     
     creds_json_str = os.environ.get("GDRIVE_SERVICE_ACCOUNT_JSON")
+    folder_id = os.environ.get("GDRIVE_FOLDER_ID")
+    
     if not creds_json_str:
         logger.warning("GDRIVE_SERVICE_ACCOUNT_JSON not set. Skipping upload.")
         await async_update_memory(video_id, {"google_drive_public_url": "https://drive.google.com/local-test-no-creds"})
@@ -38,6 +40,9 @@ async def upload_video():
             
             service = build('drive', 'v3', credentials=creds)
             file_metadata = {'name': f'{video_id}_final.mp4'}
+            if folder_id:
+                file_metadata['parents'] = [folder_id]
+                
             media = MediaFileUpload(final_video, mimetype='video/mp4', resumable=True)
             
             file = service.files().create(body=file_metadata, media_body=media, fields='id').execute()
