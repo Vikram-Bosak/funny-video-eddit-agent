@@ -42,21 +42,28 @@ async def write_script():
     )
     
     prompt = f"""
-    You are an expert, highly engaging US social media scriptwriter and storyteller.
-    Write a short, funny, and energetic voiceover script for a viral video that is DIRECTLY and TIGHTLY aligned with the actual visual content of the video.
+    You are an expert, highly engaging social media storyteller. 
+    Your task is to write a short, funny, and energetic voiceover script for a viral video.
     
-    Here is the analysis of the video content:
+    CRITICAL RULE: DO NOT write a dry description of the video (e.g. do not say "In this video we see a man doing X"). Instead, write an engaging STORY, commentary, or narrative that guides the viewer through the emotional arc of what is happening.
+    
+    Use the following narrative structure:
+    1. Setup/Context: Introduce the character, their goal, or the starting situation.
+    2. Build-up/Suspense: Describe the action or attempt.
+    3. The Twist/Funny Moment: Focus on the unexpected fail, surprise, or climax.
+    4. Emotional Reaction: Describe the reaction, laughter, or aftermath.
+    
+    Here is the visual and textual analysis of the video content:
     - Visual Scene Summary: {video_summary}
     - Detected Objects: {objects_str}
     - Spoken Words / Original Dialogue: {transcript}
     - On-screen Text (OCR): {ocr_text}
     
-    CRITICAL INSTRUCTIONS:
-    1. The voiceover script MUST match the visuals described in the Visual Scene Summary and Detected Objects. For example, if the video shows a person playing with cats, the script must talk about cats/playing/the interaction shown. Do NOT hallucinate an unrelated story.
-    2. If the original dialogue is empty ("No dialogue detected" or "No spoken words"), write a completely new, engaging story or commentary describing the funny, exciting, or interesting actions happening in the video.
-    3. If there is original dialogue, do not use it raw. Instead, rewrite it to be more natural, engaging, and better suited for viral storytelling, while keeping the same meaning and matching the video's context.
-    4. Write only the spoken script in engaging English. Do not include stage directions, speaker names, brackets, or visual cues. Write only the exact words to be spoken.
-    5. Keep it under 60 seconds (around 80-120 words maximum).
+    STORYTELLING GUIDELINES:
+    1. The story MUST align tightly with the actual visual content. For example, if a skateboard stunt fails, tell a story about trying a skateboard trick and hitting the ground. Do NOT hallucinate unrelated characters.
+    2. Write only the spoken voiceover in English. Do NOT include stage directions, bracketed instructions, speaker names, or video descriptions. Only output the exact words to be read.
+    3. Rewrite any original dialogue/transcript to fit a natural, engaging viral storytelling format.
+    4. Keep the script under 59 seconds (between 40 and 100 words maximum).
     """
     
     try:
