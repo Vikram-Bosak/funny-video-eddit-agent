@@ -8,6 +8,7 @@ from faster_whisper import WhisperModel
 import easyocr
 from ultralytics import YOLO
 from openai import OpenAI
+import json
 
 from memory_agent import async_get_latest_video_id, async_get_memory, async_update_memory
 
@@ -174,7 +175,6 @@ async def analyze_video():
             try:
                 llm_response = await asyncio.to_thread(run_llm, select_prompt)
                 logger.info(f"AI selection response: {llm_response}")
-                import json
                 clean_json = llm_response.replace("```json", "").replace("```", "").strip()
                 data = json.loads(clean_json)
                 crop_start = float(data.get("start_time", 0.0))
