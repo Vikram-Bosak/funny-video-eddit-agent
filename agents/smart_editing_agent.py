@@ -313,17 +313,56 @@ async def edit_video():
             t1_plus_d1_ms = int((t1 + d1) * 1000)
             t2_plus_d2_ms = int((t2 + d2) * 1000)
             
-            # Reset [1:a] timestamps to 0 using asetpts before trimming
-            filter_complex_parts.extend([
-                f"[2:a]apad,asplit=3[vo_p1][vo_p2][vo_p3]",
-                f"[1:a]asetpts=PTS-STARTPTS,asplit=2[orig_a1][orig_a2]",
-                f"[orig_a1]atrim=start={crop_start + t1}:end={crop_start + t1 + d1},asetpts=PTS-STARTPTS,adelay={t1_ms}|{t1_ms}[orig_seg1]",
-                f"[orig_a2]atrim=start={crop_start + t2}:end={crop_start + t2 + d2},asetpts=PTS-STARTPTS,adelay={t2_ms}|{t2_ms}[orig_seg2]",
-                f"[vo_p1]atrim=start=0:end={t1},asetpts=PTS-STARTPTS[v_piece1]",
-                f"[vo_p2]atrim=start={t1}:end={t2 - d1},asetpts=PTS-STARTPTS,adelay={t1_plus_d1_ms}|{t1_plus_d1_ms}[v_piece2]",
-                f"[vo_p3]atrim=start={t2 - d1}:end={T},asetpts=PTS-STARTPTS,adelay={t2_plus_d2_ms}|{t2_plus_d2_ms}[v_piece3]",
-                f"[orig_seg1][orig_seg2][v_piece1][v_piece2][v_piece3]amix=inputs=5:normalize=0[final_audio]"
-            ])
+            # Probe voiceover duration
+            voiceover_duration = T
+            try:
+                vo_probe = ffmpeg.probe(voiceover_path)
+                if "format" in vo_probe and "duration" in vo_probe["format"]:
+                    voiceover_duration = float(vo_probe["format"]["duration"])
+            except Exception:
+                pass
+            V = voiceover_duration
+
+            # Calculate voiceover piece durations
+            vp1_end = min(t1, V)
+            vp2_start = vp1_end
+            vp2_end = min(t2 - d1, V)
+            vp3_start = vp2_end
+            vp3_end = V
+
+            # Identify active voiceover pieces
+            active_voice_pieces = []
+            if vp1_end > 0:
+                active_voice_pieces.append(("vp1", 0, vp1_end, 0))
+            if vp2_end > vp2_start:
+                active_voice_pieces.append(("vp2", vp2_start, vp2_end, t1_plus_d1_ms))
+            if vp3_end > vp3_start:
+                active_voice_pieces.append(("vp3", vp3_start, vp3_end, t2_plus_d2_ms))
+
+            num_voice_splits = len(active_voice_pieces)
+            
+            # Build filters dynamically
+            filter_parts = []
+            filter_parts.append(f"[1:a]asetpts=PTS-STARTPTS,asplit=2[orig_a1][orig_a2]")
+            filter_parts.append(f"[orig_a1]atrim=start={crop_start + t1}:end={crop_start + t1 + d1},asetpts=PTS-STARTPTS,adelay={t1_ms}|{t1_ms}[orig_seg1]")
+            filter_parts.append(f"[orig_a2]atrim=start={crop_start + t2}:end={crop_start + t2 + d2},asetpts=PTS-STARTPTS,adelay={t2_ms}|{t2_ms}[orig_seg2]")
+            
+            mix_inputs = ["[orig_seg1]", "[orig_seg2]"]
+            
+            if num_voice_splits > 0:
+                labels = [f"vo_p{i+1}" for i in range(num_voice_splits)]
+                filter_parts.append(f"[2:a]apad,asplit={num_voice_splits}[" + "][".join(labels) + "]")
+                
+                for i, (name, start, end, delay) in enumerate(active_voice_pieces):
+                    out_label = f"[v_piece_{name}]"
+                    if delay > 0:
+                        filter_parts.append(f"[{labels[i]}]atrim=start={start}:end={end},asetpts=PTS-STARTPTS,adelay={delay}|{delay}{out_label}")
+                    else:
+                        filter_parts.append(f"[{labels[i]}]atrim=start={start}:end={end},asetpts=PTS-STARTPTS{out_label}")
+                    mix_inputs.append(out_label)
+            
+            filter_parts.append("".join(mix_inputs) + f"amix=inputs={len(mix_inputs)}:normalize=0[final_audio]")
+            filter_complex_parts.extend(filter_parts)
             audio_output_label = "[final_audio]"
         else:
             audio_output_label = "1:a:0"
