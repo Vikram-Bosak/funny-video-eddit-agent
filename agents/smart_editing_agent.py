@@ -235,7 +235,7 @@ async def edit_video():
             "-ss", str(crop_start),
             "-t", str(crop_duration),
             "-i", video_path,
-            "-vf", "crop=ih*(9/16):ih:(iw-ih*(9/16))/2:0",
+            "-vf", "crop=ih*(9/16):ih:(iw-ih*(9/16))/2:0,setpts=PTS-STARTPTS",
             "-c:v", "libx264",
             "-an",
             temp_video
