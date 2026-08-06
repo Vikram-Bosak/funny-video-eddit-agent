@@ -32,6 +32,7 @@ class MemoryModel(BaseModel):
     github_run_url: Optional[str] = None
     crop_start: Optional[float] = None
     crop_duration: Optional[float] = None
+    sound_effects: Optional[str] = None
     error: Optional[str] = None
 
 def init_db():
@@ -60,9 +61,14 @@ def init_db():
             github_run_url TEXT,
             crop_start REAL,
             crop_duration REAL,
+            sound_effects TEXT,
             error TEXT
         )
     ''')
+    try:
+        c.execute("ALTER TABLE memory ADD COLUMN sound_effects TEXT")
+    except sqlite3.OperationalError:
+        pass
     conn.commit()
     conn.close()
     logger.info("Database initialized.")
