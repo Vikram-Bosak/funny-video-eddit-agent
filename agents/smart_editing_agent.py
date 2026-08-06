@@ -2,6 +2,10 @@ import os
 import sys
 import asyncio
 import subprocess
+import math
+import wave
+import struct
+import json
 from loguru import logger
 from datetime import datetime, timezone
 import ffmpeg
@@ -204,6 +208,99 @@ def draw_hook_circle(video_path: str, output_path: str) -> bool:
     logger.info(f"Successfully processed {frame_idx} frames and added red hook circle to video start.")
     return True
 
+def generate_sfx(sfx_type, filepath):
+    # 44.1 kHz, 16-bit mono
+    sample_rate = 44100
+    
+    if sfx_type == "ding":
+        # Bright sine wave at 1000Hz decaying exponentially over 0.5s
+        duration = 0.5
+        num_samples = int(duration * sample_rate)
+        data = bytearray()
+        for i in range(num_samples):
+            t = i / sample_rate
+            freq = 1000.0
+            val = math.sin(2 * math.pi * freq * t) * math.exp(-6 * t)
+            val = int(val * 32767)
+            data.extend(struct.pack('<h', val))
+            
+    elif sfx_type == "boing":
+        # Spring boing: sine wave sweeping from 200Hz to 500Hz and back
+        duration = 0.8
+        num_samples = int(duration * sample_rate)
+        data = bytearray()
+        for i in range(num_samples):
+            t = i / sample_rate
+            # Sweeping frequency
+            freq = 200 + 300 * abs(math.sin(2 * math.pi * 3 * t))
+            val = math.sin(2 * math.pi * freq * t) * (1.0 - t/duration)
+            val = int(val * 32767)
+            data.extend(struct.pack('<h', val))
+            
+    elif sfx_type == "whoosh":
+        # Bandpassed noise sweeping frequency
+        duration = 0.6
+        num_samples = int(duration * sample_rate)
+        data = bytearray()
+        import random
+        random.seed(42)
+        for i in range(num_samples):
+            t = i / sample_rate
+            # Noise modulated by sine wave envelope
+            env = math.sin(math.pi * t / duration)
+            val = (random.random() * 2.0 - 1.0) * env * 0.5
+            val = int(val * 32767)
+            data.extend(struct.pack('<h', val))
+            
+    elif sfx_type == "alert":
+        # High pitched double beep
+        duration = 0.4
+        num_samples = int(duration * sample_rate)
+        data = bytearray()
+        for i in range(num_samples):
+            t = i / sample_rate
+            # Double beep: beep 0.1s, silent 0.05s, beep 0.1s
+            if t < 0.15 or (t > 0.22 and t < 0.37):
+                freq = 1200.0
+                val = math.sin(2 * math.pi * freq * t)
+            else:
+                val = 0
+            val = int(val * 32767 * 0.7)
+            data.extend(struct.pack('<h', val))
+            
+    elif sfx_type == "fail":
+        # Sad descending trombone note
+        duration = 1.0
+        num_samples = int(duration * sample_rate)
+        data = bytearray()
+        for i in range(num_samples):
+            t = i / sample_rate
+            # Descending frequency from 300Hz to 150Hz
+            freq = 300.0 - 150.0 * (t / duration)
+            val = math.sin(2 * math.pi * freq * t) * (1.0 - t/duration)
+            val = int(val * 32767 * 0.8)
+            data.extend(struct.pack('<h', val))
+            
+    else:  # "laugh"
+        # Chuckle: modulated low-frequency wave with chuckle envelop
+        duration = 1.2
+        num_samples = int(duration * sample_rate)
+        data = bytearray()
+        for i in range(num_samples):
+            t = i / sample_rate
+            # Chuckle pulsation
+            pulse = abs(math.sin(2 * math.pi * 5 * t))
+            freq = 180.0 + 40.0 * pulse
+            val = math.sin(2 * math.pi * freq * t) * pulse * (1.0 - t/duration)
+            val = int(val * 32767 * 0.6)
+            data.extend(struct.pack('<h', val))
+
+    with wave.open(filepath, 'wb') as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(sample_rate)
+        w.writeframes(data)
+
 async def edit_video():
     video_id = await async_get_latest_video_id()
     if not video_id:
@@ -254,47 +351,38 @@ async def edit_video():
         ass_path = f"exports/{video_id}_subs.ass"
         subs_success = generate_ass_subtitles(voiceover_path, ass_path)
         
-        # Check if original video has audio
-        has_audio = False
-        actual_duration = crop_duration
+        # 3. Add Voiceover, plan sound effects (Rule 114 completely removed) and burn in subtitles
+        logger.info("Mixing voiceover and planned sound effects (original audio completely removed)...")
+        
+        # Retrieve planned sound effects from memory
+        sound_effects_str = memory.sound_effects if hasattr(memory, "sound_effects") and memory.sound_effects else "[]"
         try:
-            probe = ffmpeg.probe(video_path)
-            for stream in probe.get("streams", []):
-                if stream.get("codec_type") == "audio":
-                    has_audio = True
-            if "format" in probe and "duration" in probe["format"]:
-                actual_duration = float(probe["format"]["duration"])
-        except Exception as e:
-            logger.warning(f"Failed to probe audio in original video: {e}")
+            sound_effects = json.loads(sound_effects_str)
+        except Exception:
+            sound_effects = []
             
-        clean_audio_path = f"exports/{video_id}_clean_audio.wav"
-        if has_audio:
-            logger.info("Extracting clean audio track to WAV to normalize timestamps...")
-            subprocess.run([
-                "ffmpeg", "-y",
-                "-i", video_path,
-                "-vn",
-                "-c:a", "pcm_s16le",
-                clean_audio_path
-            ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            
-        # 3. Add Voiceover and burn in subtitles
-        logger.info("Syncing voiceover with original audio integration (Rule 114) and burning subtitles...")
+        logger.info(f"Retrieved planned sound effects: {sound_effects}")
         
-        T = min(crop_duration, actual_duration)
+        # Generate SFX files on demand
+        sfx_paths = []
+        for i, sfx in enumerate(sound_effects):
+            sfx_path = f"exports/{video_id}_sfx_{i}.wav"
+            try:
+                generate_sfx(sfx["type"], sfx_path)
+                sfx_paths.append((sfx_path, float(sfx["time_offset"])))
+            except Exception as e:
+                logger.error(f"Failed to generate SFX {sfx['type']}: {e}")
+
+        T = crop_duration
         
+        # FFmpeg command inputs
         command = ["ffmpeg", "-y"]
-        if has_audio:
-            command.extend([
-                "-stream_loop", "-1", "-i", temp_video,
-                "-i", clean_audio_path,
-                "-i", voiceover_path
-            ])
-        else:
-            command.extend([
-                "-stream_loop", "-1", "-i", temp_video,
-                "-i", voiceover_path
-            ])
+        command.extend([
+            "-stream_loop", "-1", "-i", temp_video,
+            "-i", voiceover_path
+        ])
+        for sfx_path, _ in sfx_paths:
+            command.extend(["-i", sfx_path])
 
         filter_complex_parts = []
         video_output_label = "0:v:0"
@@ -303,42 +391,22 @@ async def edit_video():
             filter_complex_parts.append(f"[0:v:0]subtitles='{escaped_ass}'[v_subbed]")
             video_output_label = "[v_subbed]"
             
-        if has_audio:
-            # Splicing parameters for original audio integration
-            t1 = T * 0.3
-            t2 = T * 0.7
-            d1 = 2.5
-            d2 = 2.5
+        # Build audio filter graph
+        filter_parts = []
+        mix_inputs = ["[1:a]"]
+        
+        # Delay each sound effect to its planned time_offset
+        for idx, (_, time_offset) in enumerate(sfx_paths):
+            sfx_input_idx = 2 + idx
+            sfx_time_ms = int(time_offset * 1000)
+            out_label = f"[sfx_delayed_{idx}]"
+            filter_parts.append(f"[{sfx_input_idx}:a]asetpts=PTS-STARTPTS,adelay={sfx_time_ms}|{sfx_time_ms}{out_label}")
+            mix_inputs.append(out_label)
             
-            if t1 + d1 >= t2:
-                t2 = t1 + d1 + 2.0
-            if t2 + d2 >= T:
-                t2 = T - d2 - 1.0
-                t1 = t2 - d1 - 2.0
-                if t1 < 0:
-                    t1 = 1.0
-                    t2 = t1 + d1 + 1.0
-                    
-            t1_ms = int(t1 * 1000)
-            t2_ms = int(t2 * 1000)
-            
-            # Build filters using volume ducking to keep timelines aligned and prevent audio cutoff
-            filter_parts = []
-            filter_parts.append(f"[1:a]asetpts=PTS-STARTPTS,asplit=2[orig_a1][orig_a2]")
-            filter_parts.append(f"[orig_a1]atrim=start={crop_start + t1}:end={crop_start + t1 + d1},asetpts=PTS-STARTPTS,adelay={t1_ms}|{t1_ms}[orig_seg1]")
-            filter_parts.append(f"[orig_a2]atrim=start={crop_start + t2}:end={crop_start + t2 + d2},asetpts=PTS-STARTPTS,adelay={t2_ms}|{t2_ms}[orig_seg2]")
-            
-            # Duck the voiceover volume to 0 during t1 to t1+d1 and t2 to t2+d2
-            filter_parts.append(f"[2:a]volume=eval=frame:volume='if(between(t,{t1},{t1+d1})+between(t,{t2},{t2+d2}),0,1)'[vo_ducked]")
-            
-            # Mix the ducked voiceover and the two original audio segments
-            filter_parts.append(f"[orig_seg1][orig_seg2][vo_ducked]amix=inputs=3:normalize=0,asetpts=PTS-STARTPTS[final_audio]")
-            
-            filter_complex_parts.extend(filter_parts)
-            audio_output_label = "[final_audio]"
-        else:
-            filter_complex_parts.append(f"[1:a]asetpts=PTS-STARTPTS[final_audio]")
-            audio_output_label = "[final_audio]"
+        # Mix voiceover with sound effects and reset final audio PTS to 0
+        filter_parts.append("".join(mix_inputs) + f"amix=inputs={len(mix_inputs)}:normalize=0,asetpts=PTS-STARTPTS[final_audio]")
+        filter_complex_parts.extend(filter_parts)
+        audio_output_label = "[final_audio]"
             
         if filter_complex_parts:
             command.extend(["-filter_complex", ";".join(filter_complex_parts)])
@@ -360,11 +428,12 @@ async def edit_video():
             logger.error(f"FFmpeg stderr: {res.stderr}")
             raise Exception(f"FFmpeg error: {res.stderr}")
         
-        # Cleanup temp
+        # Cleanup temp files
         if os.path.exists(temp_video):
             os.remove(temp_video)
-        if os.path.exists(clean_audio_path):
-            os.remove(clean_audio_path)
+        for sfx_path, _ in sfx_paths:
+            if os.path.exists(sfx_path):
+                os.remove(sfx_path)
             
         await async_update_memory(video_id, {
             "final_video_path": final_video_path,

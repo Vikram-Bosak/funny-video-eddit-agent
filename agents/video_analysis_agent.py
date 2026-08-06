@@ -191,6 +191,62 @@ async def analyze_video():
 
         logger.info(f"Selected crop window: start={crop_start:.2f}s, duration={crop_duration:.2f}s")
         
+        # Plan sound effects (ding, boing, whoosh, alert, fail, laugh)
+        logger.info("Requesting AI to plan sound effects for the video...")
+        sfx_prompt = f"""
+        You are an expert video editor. Analyze this video timeline data and plan exactly 2 to 4 appropriate sound effects to add to the video to make it engaging and funny.
+        
+        Selected Crop Window: start={crop_start:.2f}s, duration={crop_duration:.2f}s (all sound effect timestamps MUST be between 0.0 and {crop_duration:.2f}s relative to the start of the crop window).
+        
+        Timeline and Scene Analysis:
+        {json.dumps(scene_analysis[:20], indent=2)}
+        
+        Transcript with Timestamps:
+        {raw_transcript[:2000]}
+        
+        OCR Text: {ocr_str[:1000]}
+        
+        Available sound effect types:
+        - "boing" (funny bounce/action/surprise)
+        - "whoosh" (fast movement/scene change)
+        - "ding" (success/bright idea/ding)
+        - "alert" (warning/alarm/shock)
+        - "fail" (funny failure/falling/slip)
+        - "laugh" (man chuckling/giggling)
+        
+        Identify 2 to 4 key moments in the cropped video where these sound effects would fit best.
+        Return ONLY a valid JSON list of sound effect objects, where each object has "time_offset" (seconds from crop start as float) and "type" (one of the available types). Example response:
+        [
+          {{"time_offset": 3.5, "type": "boing"}},
+          {{"time_offset": 12.0, "type": "whoosh"}}
+        ]
+        Do not output any explanation or extra text.
+        """
+        
+        sound_effects = []
+        try:
+            sfx_response = await asyncio.to_thread(run_llm, sfx_prompt)
+            logger.info(f"AI SFX planning response: {sfx_response}")
+            clean_sfx_json = sfx_response.replace("```json", "").replace("```", "").strip()
+            sound_effects = json.loads(clean_sfx_json)
+            # Filter and validate sound_effects
+            valid_types = {"boing", "whoosh", "ding", "alert", "fail", "laugh"}
+            sound_effects = [
+                sfx for sfx in sound_effects
+                if isinstance(sfx, dict) 
+                and 0.0 <= float(sfx.get("time_offset", -1)) <= crop_duration 
+                and sfx.get("type") in valid_types
+            ]
+        except Exception as e:
+            logger.warning(f"Failed to plan sound effects with AI: {e}")
+            # Fallback to default sound effects at 30% and 70% of duration
+            sound_effects = [
+                {"time_offset": float(f"{crop_duration * 0.3:.2f}"), "type": "boing"},
+                {"time_offset": float(f"{crop_duration * 0.7:.2f}"), "type": "whoosh"}
+            ]
+            
+        logger.info(f"Planned sound effects: {sound_effects}")
+        
         # Save results
         await async_update_memory(video_id, {
             "scene_analysis": scene_analysis,
@@ -199,7 +255,8 @@ async def analyze_video():
             "summary": summary_text,
             "ocr_text": ocr_str,
             "crop_start": crop_start,
-            "crop_duration": crop_duration
+            "crop_duration": crop_duration,
+            "sound_effects": json.dumps(sound_effects)
         })
         
         logger.success("Video analysis complete.")
