@@ -228,22 +228,44 @@ async def edit_video():
         
         # Check if original video has audio
         has_audio = False
+        actual_duration = crop_duration
         try:
             probe = ffmpeg.probe(video_path)
             for stream in probe.get("streams", []):
                 if stream.get("codec_type") == "audio":
                     has_audio = True
-                    break
+            if "format" in probe and "duration" in probe["format"]:
+                actual_duration = float(probe["format"]["duration"])
         except Exception as e:
             logger.warning(f"Failed to probe audio in original video: {e}")
             
         # 3. Add Voiceover and burn in subtitles
         logger.info("Syncing voiceover with original audio integration (Rule 114) and burning subtitles...")
         
+        T = min(crop_duration, actual_duration)
+        
         command = ["ffmpeg", "-y"]
         if has_audio:
+            command.extend([
+                "-stream_loop", "-1", "-i", temp_video,
+                "-i", video_path,
+                "-i", voiceover_path
+            ])
+        else:
+            command.extend([
+                "-stream_loop", "-1", "-i", temp_video,
+                "-i", voiceover_path
+            ])
+
+        filter_complex_parts = []
+        video_output_label = "0:v:0"
+        if subs_success:
+            escaped_ass = ass_path.replace("\\", "/").replace(":", "\\:")
+            filter_complex_parts.append(f"[0:v:0]subtitles='{escaped_ass}'[v_subbed]")
+            video_output_label = "[v_subbed]"
+            
+        if has_audio:
             # Splicing parameters for original audio integration
-            T = crop_duration
             t1 = T * 0.3
             t2 = T * 0.7
             d1 = 2.5
@@ -263,47 +285,30 @@ async def edit_video():
             t1_plus_d1_ms = int((t1 + d1) * 1000)
             t2_plus_d2_ms = int((t2 + d2) * 1000)
             
-            filter_complex = (
-                f"[2:a]apad,asplit=3[vo_p1][vo_p2][vo_p3];"
-                f"[1:a]atrim=start={crop_start + t1}:end={crop_start + t1 + d1},asetpts=PTS-STARTPTS,adelay={t1_ms}|{t1_ms}[orig_seg1];"
-                f"[1:a]atrim=start={crop_start + t2}:end={crop_start + t2 + d2},asetpts=PTS-STARTPTS,adelay={t2_ms}|{t2_ms}[orig_seg2];"
-                f"[vo_p1]atrim=start=0:end={t1},asetpts=PTS-STARTPTS[v_piece1];"
-                f"[vo_p2]atrim=start={t1}:end={t2 - d1},asetpts=PTS-STARTPTS,adelay={t1_plus_d1_ms}|{t1_plus_d1_ms}[v_piece2];"
-                f"[vo_p3]atrim=start={t2 - d1}:end={T},asetpts=PTS-STARTPTS,adelay={t2_plus_d2_ms}|{t2_plus_d2_ms}[v_piece3];"
+            filter_complex_parts.extend([
+                f"[2:a]apad,asplit=3[vo_p1][vo_p2][vo_p3]",
+                f"[1:a]atrim=start={crop_start + t1}:end={crop_start + t1 + d1},asetpts=PTS-STARTPTS,adelay={t1_ms}|{t1_ms}[orig_seg1]",
+                f"[1:a]atrim=start={crop_start + t2}:end={crop_start + t2 + d2},asetpts=PTS-STARTPTS,adelay={t2_ms}|{t2_ms}[orig_seg2]",
+                f"[vo_p1]atrim=start=0:end={t1},asetpts=PTS-STARTPTS[v_piece1]",
+                f"[vo_p2]atrim=start={t1}:end={t2 - d1},asetpts=PTS-STARTPTS,adelay={t1_plus_d1_ms}|{t1_plus_d1_ms}[v_piece2]",
+                f"[vo_p3]atrim=start={t2 - d1}:end={T},asetpts=PTS-STARTPTS,adelay={t2_plus_d2_ms}|{t2_plus_d2_ms}[v_piece3]",
                 f"[orig_seg1][orig_seg2][v_piece1][v_piece2][v_piece3]amix=inputs=5:normalize=0[final_audio]"
-            )
-            
-            command.extend([
-                "-stream_loop", "-1", "-i", temp_video,
-                "-i", video_path,
-                "-i", voiceover_path,
-                "-filter_complex", filter_complex
             ])
+            audio_output_label = "[final_audio]"
         else:
-            command.extend([
-                "-stream_loop", "-1", "-i", temp_video,
-                "-i", voiceover_path
-            ])
+            audio_output_label = "1:a:0"
             
-        if subs_success:
-            escaped_ass_path = ass_path.replace("\\", "/")
-            command.extend(["-vf", f"subtitles={escaped_ass_path}"])
+        if filter_complex_parts:
+            command.extend(["-filter_complex", ";".join(filter_complex_parts)])
             
         command.extend([
+            "-map", video_output_label,
+            "-map", audio_output_label,
             "-c:v", "libx264",
             "-c:a", "aac",
             "-pix_fmt", "yuv420p",
-            "-map", "0:v:0"
-        ])
-        
-        if has_audio:
-            command.extend(["-map", "[final_audio]"])
-        else:
-            command.extend(["-map", "1:a:0"])
-            
-        command.extend([
             "-shortest",
-            "-t", str(crop_duration),
+            "-t", str(T),
             final_video_path
         ])
         
