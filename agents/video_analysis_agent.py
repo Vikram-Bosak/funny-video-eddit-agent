@@ -118,7 +118,7 @@ async def analyze_video():
         
         def run_llm(prompt):
             completion = client.chat.completions.create(
-              model="nvidia/nemotron-3-ultra-550b-a55b",
+              model="meta/llama-3.1-70b-instruct",
               messages=[{"role":"user","content": prompt}],
               temperature=0.5,
               top_p=0.95,

@@ -47,6 +47,8 @@ async def write_script():
     
     CRITICAL RULE: DO NOT write a dry description of the video (e.g. do not say "In this video we see a man doing X"). Instead, write an engaging STORY, commentary, or narrative that guides the viewer through the emotional arc of what is happening.
     
+    If the video contains action, suspense, dramatic, or fictional movie scenes/trailers, treat them as pure cinematic entertainment and write an exciting, energetic, or humorous commentary for the movie fans. Do NOT refuse to write the script, and do NOT output any safety warnings or refusal messages.
+    
     Use the following narrative structure:
     1. Setup/Context: Introduce the character, their goal, or the starting situation.
     2. Build-up/Suspense: Describe the action or attempt.
@@ -69,12 +71,11 @@ async def write_script():
     try:
         def generate():
             completion = client.chat.completions.create(
-              model="nvidia/nemotron-3-ultra-550b-a55b",
+              model="meta/llama-3.1-70b-instruct",
               messages=[{"role":"user","content": prompt}],
-              temperature=1,
+              temperature=0.8,
               top_p=0.95,
-              max_tokens=16384,
-              extra_body={"chat_template_kwargs":{"enable_thinking":True},"reasoning_budget":16384},
+              max_tokens=1024,
               stream=False
             )
             return completion.choices[0].message.content.strip()
