@@ -81,17 +81,39 @@ def generate_ass_subtitles(voiceover_path: str, ass_path: str):
 def draw_hook_circle(video_path: str, output_path: str) -> bool:
     import cv2
     import subprocess
+    import numpy as np
+    import ffmpeg
     from ultralytics import YOLO
     
     logger.info("Detecting subject head to draw red hook circle...")
-    cap = cv2.VideoCapture(video_path)
-    if not cap.isOpened():
-        logger.error("Could not open video to draw circle.")
+    
+    # Probe video metadata using FFmpeg
+    try:
+        probe = ffmpeg.probe(video_path)
+        video_stream = next((stream for stream in probe['streams'] if stream['codec_type'] == 'video'), None)
+        if not video_stream:
+            logger.error("No video stream found in temp video.")
+            return False
+        width = int(video_stream['width'])
+        height = int(video_stream['height'])
+        # Calculate FPS
+        r_frame_rate = video_stream.get('r_frame_rate', '30/1')
+        num, den = map(int, r_frame_rate.split('/'))
+        fps = num / den if den != 0 else 30.0
+    except Exception as e:
+        logger.error(f"Failed to probe temp video: {e}")
         return False
         
-    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+    # Start FFmpeg process to read video frames as raw BGR24 bytes
+    ffmpeg_read_cmd = [
+        "ffmpeg", "-y",
+        "-i", video_path,
+        "-f", "image2pipe",
+        "-pix_fmt", "bgr24",
+        "-vcodec", "rawvideo",
+        "-"
+    ]
+    read_process = subprocess.Popen(ffmpeg_read_cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
     
     # Start FFmpeg process to write video via pipe
     ffmpeg_cmd = [
@@ -108,8 +130,6 @@ def draw_hook_circle(video_path: str, output_path: str) -> bool:
     ]
     process = subprocess.Popen(ffmpeg_cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     
-    # Reset video capture to start
-    cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
     circle_duration_frames = int(fps * 1.5)  # 1.5 seconds duration
     
     # Pre-load YOLO model
@@ -121,11 +141,16 @@ def draw_hook_circle(video_path: str, output_path: str) -> bool:
         
     last_known_circle = None  # (cx, cy, r)
     frame_idx = 0
+    frame_size = width * height * 3
     
     while True:
-        ret, frame = cap.read()
-        if not ret:
+        in_bytes = read_process.stdout.read(frame_size)
+        if not in_bytes or len(in_bytes) < frame_size:
             break
+            
+        frame = np.frombuffer(in_bytes, np.uint8).reshape((height, width, 3))
+        # Copy to allow modifications on writable memory
+        frame = frame.copy()
             
         if frame_idx < circle_duration_frames:
             cx, cy, r = None, None, None
@@ -171,10 +196,12 @@ def draw_hook_circle(video_path: str, output_path: str) -> bool:
         process.stdin.write(frame.tobytes())
         frame_idx += 1
         
-    cap.release()
+    read_process.stdout.close()
+    read_process.wait()
     process.stdin.close()
     process.wait()
-    logger.info("Successfully added red hook circle to video start.")
+    
+    logger.info(f"Successfully processed {frame_idx} frames and added red hook circle to video start.")
     return True
 
 async def edit_video():
