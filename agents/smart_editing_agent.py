@@ -372,11 +372,12 @@ async def edit_video():
                         filter_parts.append(f"[{labels[i]}]atrim=start={start}:end={end},asetpts=PTS-STARTPTS{out_label}")
                     mix_inputs.append(out_label)
             
-            filter_parts.append("".join(mix_inputs) + f"amix=inputs={len(mix_inputs)}:normalize=0[final_audio]")
+            filter_parts.append("".join(mix_inputs) + f"amix=inputs={len(mix_inputs)}:normalize=0,asetpts=PTS-STARTPTS[final_audio]")
             filter_complex_parts.extend(filter_parts)
             audio_output_label = "[final_audio]"
         else:
-            audio_output_label = "1:a:0"
+            filter_complex_parts.append(f"[1:a]asetpts=PTS-STARTPTS[final_audio]")
+            audio_output_label = "[final_audio]"
             
         if filter_complex_parts:
             command.extend(["-filter_complex", ";".join(filter_complex_parts)])
