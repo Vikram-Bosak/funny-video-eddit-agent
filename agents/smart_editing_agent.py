@@ -218,13 +218,24 @@ async def edit_video():
         logger.error("Required paths not found in memory.")
         sys.exit(1)
         
-    logger.info("Editing video using FFmpeg (crop to 9:16 and add audio)...")
+    logger.info("Normalizing downloaded video timestamps...")
     
     os.makedirs("exports", exist_ok=True)
+    temp_clean_input = f"exports/{video_id}_clean.mp4"
     temp_video = f"exports/{video_id}_temp.mp4"
     final_video_path = f"exports/{video_id}_final.mp4"
     
     try:
+        # Normalize input timestamps using fast stream copy
+        subprocess.run([
+            "ffmpeg", "-y",
+            "-i", video_path,
+            "-c", "copy",
+            "-start_at_zero",
+            temp_clean_input
+        ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        video_path = temp_clean_input
+
         # 1. Crop video to 9:16, seek to crop_start, set crop_duration
         crop_start = memory.crop_start if memory.crop_start is not None else 0.0
         crop_duration = memory.crop_duration if memory.crop_duration is not None else 59.0
@@ -235,7 +246,7 @@ async def edit_video():
             "-ss", str(crop_start),
             "-t", str(crop_duration),
             "-i", video_path,
-            "-vf", "crop=ih*(9/16):ih:(iw-ih*(9/16))/2:0,setpts=PTS-STARTPTS",
+            "-vf", "crop=ih*(9/16):ih:(iw-ih*(9/16))/2:0",
             "-c:v", "libx264",
             "-an",
             temp_video
@@ -270,22 +281,12 @@ async def edit_video():
         logger.info("Syncing voiceover with original audio integration (Rule 114) and burning subtitles...")
         
         T = min(crop_duration, actual_duration)
-        temp_orig_audio = f"exports/{video_id}_orig_audio.wav"
         
         command = ["ffmpeg", "-y"]
         if has_audio:
-            # Extract clean audio from original video with 0-based timestamps
-            subprocess.run([
-                "ffmpeg", "-y",
-                "-i", video_path,
-                "-vn",
-                "-af", "asetpts=PTS-STARTPTS",
-                temp_orig_audio
-            ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            
             command.extend([
                 "-stream_loop", "-1", "-i", temp_video,
-                "-i", temp_orig_audio,
+                "-i", video_path,
                 "-i", voiceover_path
             ])
         else:
@@ -358,8 +359,8 @@ async def edit_video():
         # Cleanup temp
         if os.path.exists(temp_video):
             os.remove(temp_video)
-        if os.path.exists(temp_orig_audio):
-            os.remove(temp_orig_audio)
+        if os.path.exists(temp_clean_input):
+            os.remove(temp_clean_input)
             
         await async_update_memory(video_id, {
             "final_video_path": final_video_path,
