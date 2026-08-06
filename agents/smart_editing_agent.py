@@ -321,58 +321,19 @@ async def edit_video():
                     
             t1_ms = int(t1 * 1000)
             t2_ms = int(t2 * 1000)
-            t1_plus_d1_ms = int((t1 + d1) * 1000)
-            t2_plus_d2_ms = int((t2 + d2) * 1000)
             
-            # Probe voiceover duration
-            voiceover_duration = T
-            try:
-                vo_probe = ffmpeg.probe(voiceover_path)
-                if "format" in vo_probe and "duration" in vo_probe["format"]:
-                    voiceover_duration = float(vo_probe["format"]["duration"])
-            except Exception:
-                pass
-            V = voiceover_duration
-
-            # Calculate voiceover piece durations
-            vp1_end = min(t1, V)
-            vp2_start = vp1_end
-            vp2_end = min(t2 - d1, V)
-            vp3_start = vp2_end
-            vp3_end = V
-
-            # Identify active voiceover pieces
-            active_voice_pieces = []
-            if vp1_end > 0:
-                active_voice_pieces.append(("vp1", 0, vp1_end, 0))
-            if vp2_end > vp2_start:
-                active_voice_pieces.append(("vp2", vp2_start, vp2_end, t1_plus_d1_ms))
-            if vp3_end > vp3_start:
-                active_voice_pieces.append(("vp3", vp3_start, vp3_end, t2_plus_d2_ms))
-
-            num_voice_splits = len(active_voice_pieces)
-            
-            # Build filters dynamically
+            # Build filters using volume ducking to keep timelines aligned and prevent audio cutoff
             filter_parts = []
             filter_parts.append(f"[1:a]asetpts=PTS-STARTPTS,asplit=2[orig_a1][orig_a2]")
             filter_parts.append(f"[orig_a1]atrim=start={crop_start + t1}:end={crop_start + t1 + d1},asetpts=PTS-STARTPTS,adelay={t1_ms}|{t1_ms}[orig_seg1]")
             filter_parts.append(f"[orig_a2]atrim=start={crop_start + t2}:end={crop_start + t2 + d2},asetpts=PTS-STARTPTS,adelay={t2_ms}|{t2_ms}[orig_seg2]")
             
-            mix_inputs = ["[orig_seg1]", "[orig_seg2]"]
+            # Duck the voiceover volume to 0 during t1 to t1+d1 and t2 to t2+d2
+            filter_parts.append(f"[2:a]volume=eval=frame:volume='if(between(t,{t1},{t1+d1})+between(t,{t2},{t2+d2}),0,1)'[vo_ducked]")
             
-            if num_voice_splits > 0:
-                labels = [f"vo_p{i+1}" for i in range(num_voice_splits)]
-                filter_parts.append(f"[2:a]apad,asplit={num_voice_splits}[" + "][".join(labels) + "]")
-                
-                for i, (name, start, end, delay) in enumerate(active_voice_pieces):
-                    out_label = f"[v_piece_{name}]"
-                    if delay > 0:
-                        filter_parts.append(f"[{labels[i]}]atrim=start={start}:end={end},asetpts=PTS-STARTPTS,adelay={delay}|{delay}{out_label}")
-                    else:
-                        filter_parts.append(f"[{labels[i]}]atrim=start={start}:end={end},asetpts=PTS-STARTPTS{out_label}")
-                    mix_inputs.append(out_label)
+            # Mix the ducked voiceover and the two original audio segments
+            filter_parts.append(f"[orig_seg1][orig_seg2][vo_ducked]amix=inputs=3:normalize=0,asetpts=PTS-STARTPTS[final_audio]")
             
-            filter_parts.append("".join(mix_inputs) + f"amix=inputs={len(mix_inputs)}:normalize=0,asetpts=PTS-STARTPTS[final_audio]")
             filter_complex_parts.extend(filter_parts)
             audio_output_label = "[final_audio]"
         else:
