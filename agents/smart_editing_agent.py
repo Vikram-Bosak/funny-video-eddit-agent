@@ -243,12 +243,22 @@ async def edit_video():
         logger.info("Syncing voiceover with original audio integration (Rule 114) and burning subtitles...")
         
         T = min(crop_duration, actual_duration)
+        temp_orig_audio = f"exports/{video_id}_orig_audio.wav"
         
         command = ["ffmpeg", "-y"]
         if has_audio:
+            # Extract clean audio from original video with 0-based timestamps
+            subprocess.run([
+                "ffmpeg", "-y",
+                "-i", video_path,
+                "-vn",
+                "-af", "asetpts=PTS-STARTPTS",
+                temp_orig_audio
+            ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            
             command.extend([
                 "-stream_loop", "-1", "-i", temp_video,
-                "-i", video_path,
+                "-i", temp_orig_audio,
                 "-i", voiceover_path
             ])
         else:
@@ -321,6 +331,8 @@ async def edit_video():
         # Cleanup temp
         if os.path.exists(temp_video):
             os.remove(temp_video)
+        if os.path.exists(temp_orig_audio):
+            os.remove(temp_orig_audio)
             
         await async_update_memory(video_id, {
             "final_video_path": final_video_path,
