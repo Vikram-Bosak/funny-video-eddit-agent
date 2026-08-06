@@ -80,6 +80,7 @@ def generate_ass_subtitles(voiceover_path: str, ass_path: str):
 
 def draw_hook_circle(video_path: str, output_path: str) -> bool:
     import cv2
+    import subprocess
     from ultralytics import YOLO
     
     logger.info("Detecting subject head to draw red hook circle...")
@@ -92,9 +93,20 @@ def draw_hook_circle(video_path: str, output_path: str) -> bool:
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
     
-    # We must use 'mp4v' or another standard codec for writing
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+    # Start FFmpeg process to write video via pipe
+    ffmpeg_cmd = [
+        "ffmpeg", "-y",
+        "-f", "rawvideo",
+        "-vcodec", "rawvideo",
+        "-s", f"{width}x{height}",
+        "-pix_fmt", "bgr24",
+        "-r", str(fps),
+        "-i", "-",
+        "-c:v", "libx264",
+        "-pix_fmt", "yuv420p",
+        output_path
+    ]
+    process = subprocess.Popen(ffmpeg_cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     
     # Reset video capture to start
     cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
@@ -156,11 +168,12 @@ def draw_hook_circle(video_path: str, output_path: str) -> bool:
             # Draw red circle (BGR: 0, 0, 255), thickness=4
             cv2.circle(frame, (cx, cy), r, (0, 0, 255), 4)
             
-        out.write(frame)
+        process.stdin.write(frame.tobytes())
         frame_idx += 1
         
     cap.release()
-    out.release()
+    process.stdin.close()
+    process.wait()
     logger.info("Successfully added red hook circle to video start.")
     return True
 
