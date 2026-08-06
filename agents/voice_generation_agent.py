@@ -46,19 +46,10 @@ async def generate_voice():
         logger.info("Initializing Kokoro TTS model...")
         kokoro = Kokoro(model_file, voices_file)
         
-        # Available high-quality voices in Kokoro-ONNX
-        available_voices = [
-            "af_bella", "af_sarah", "af_nicole", "af_sky",
-            "am_adam", "am_michael", "am_eric",
-            "bf_emma", "bf_isabella", "bm_george", "bm_lewis"
-        ]
+        selected_voice = "af_sarah"
+        lang_code = "en-us"
         
-        # Hash video_id to dynamically and stably choose a unique voice
-        voice_index = int(hashlib.md5(video_id.encode('utf-8')).hexdigest(), 16) % len(available_voices)
-        selected_voice = available_voices[voice_index]
-        lang_code = "en-gb" if selected_voice.startswith("b") else "en-us"
-        
-        logger.info(f"Synthesizing speech using dynamically selected voice: {selected_voice} (lang: {lang_code})")
+        logger.info(f"Synthesizing speech using flagship realistic female voice: {selected_voice}")
         samples, sample_rate = kokoro.create(script, voice=selected_voice, speed=1.0, lang=lang_code)
         
         sf.write(voiceover_path, samples, sample_rate)
