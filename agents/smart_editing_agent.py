@@ -218,35 +218,25 @@ async def edit_video():
         logger.error("Required paths not found in memory.")
         sys.exit(1)
         
-    logger.info("Normalizing downloaded video timestamps...")
+    logger.info("Editing video using FFmpeg (crop to 9:16 and add audio)...")
     
     os.makedirs("exports", exist_ok=True)
-    temp_clean_input = f"exports/{video_id}_clean.mp4"
     temp_video = f"exports/{video_id}_temp.mp4"
     final_video_path = f"exports/{video_id}_final.mp4"
     
     try:
-        # Normalize input timestamps using fast stream copy
-        subprocess.run([
-            "ffmpeg", "-y",
-            "-i", video_path,
-            "-c", "copy",
-            "-start_at_zero",
-            temp_clean_input
-        ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        video_path = temp_clean_input
-
         # 1. Crop video to 9:16, seek to crop_start, set crop_duration
         crop_start = memory.crop_start if memory.crop_start is not None else 0.0
         crop_duration = memory.crop_duration if memory.crop_duration is not None else 59.0
         
         logger.info(f"Cropping video starting at {crop_start:.2f}s for {crop_duration:.2f}s...")
+        # Use output seeking (-ss after -i) and setpts=PTS-STARTPTS to safely reset video PTS to 0
         crop_command = [
             "ffmpeg", "-y",
+            "-i", video_path,
             "-ss", str(crop_start),
             "-t", str(crop_duration),
-            "-i", video_path,
-            "-vf", "crop=ih*(9/16):ih:(iw-ih*(9/16))/2:0",
+            "-vf", "crop=ih*(9/16):ih:(iw-ih*(9/16))/2:0,setpts=PTS-STARTPTS",
             "-c:v", "libx264",
             "-an",
             temp_video
@@ -323,10 +313,12 @@ async def edit_video():
             t1_plus_d1_ms = int((t1 + d1) * 1000)
             t2_plus_d2_ms = int((t2 + d2) * 1000)
             
+            # Reset [1:a] timestamps to 0 using asetpts before trimming
             filter_complex_parts.extend([
                 f"[2:a]apad,asplit=3[vo_p1][vo_p2][vo_p3]",
-                f"[1:a]atrim=start={crop_start + t1}:end={crop_start + t1 + d1},asetpts=PTS-STARTPTS,adelay={t1_ms}|{t1_ms}[orig_seg1]",
-                f"[1:a]atrim=start={crop_start + t2}:end={crop_start + t2 + d2},asetpts=PTS-STARTPTS,adelay={t2_ms}|{t2_ms}[orig_seg2]",
+                f"[1:a]asetpts=PTS-STARTPTS,asplit=2[orig_a1][orig_a2]",
+                f"[orig_a1]atrim=start={crop_start + t1}:end={crop_start + t1 + d1},asetpts=PTS-STARTPTS,adelay={t1_ms}|{t1_ms}[orig_seg1]",
+                f"[orig_a2]atrim=start={crop_start + t2}:end={crop_start + t2 + d2},asetpts=PTS-STARTPTS,adelay={t2_ms}|{t2_ms}[orig_seg2]",
                 f"[vo_p1]atrim=start=0:end={t1},asetpts=PTS-STARTPTS[v_piece1]",
                 f"[vo_p2]atrim=start={t1}:end={t2 - d1},asetpts=PTS-STARTPTS,adelay={t1_plus_d1_ms}|{t1_plus_d1_ms}[v_piece2]",
                 f"[vo_p3]atrim=start={t2 - d1}:end={T},asetpts=PTS-STARTPTS,adelay={t2_plus_d2_ms}|{t2_plus_d2_ms}[v_piece3]",
@@ -359,8 +351,6 @@ async def edit_video():
         # Cleanup temp
         if os.path.exists(temp_video):
             os.remove(temp_video)
-        if os.path.exists(temp_clean_input):
-            os.remove(temp_clean_input)
             
         await async_update_memory(video_id, {
             "final_video_path": final_video_path,
