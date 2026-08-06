@@ -267,6 +267,17 @@ async def edit_video():
         except Exception as e:
             logger.warning(f"Failed to probe audio in original video: {e}")
             
+        clean_audio_path = f"exports/{video_id}_clean_audio.wav"
+        if has_audio:
+            logger.info("Extracting clean audio track to WAV to normalize timestamps...")
+            subprocess.run([
+                "ffmpeg", "-y",
+                "-i", video_path,
+                "-vn",
+                "-c:a", "pcm_s16le",
+                clean_audio_path
+            ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            
         # 3. Add Voiceover and burn in subtitles
         logger.info("Syncing voiceover with original audio integration (Rule 114) and burning subtitles...")
         
@@ -276,7 +287,7 @@ async def edit_video():
         if has_audio:
             command.extend([
                 "-stream_loop", "-1", "-i", temp_video,
-                "-i", video_path,
+                "-i", clean_audio_path,
                 "-i", voiceover_path
             ])
         else:
@@ -390,6 +401,8 @@ async def edit_video():
         # Cleanup temp
         if os.path.exists(temp_video):
             os.remove(temp_video)
+        if os.path.exists(clean_audio_path):
+            os.remove(clean_audio_path)
             
         await async_update_memory(video_id, {
             "final_video_path": final_video_path,
