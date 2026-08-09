@@ -101,19 +101,17 @@ async def analyze_reels_metadata(title: str, description: str, username: str) ->
     Tweet Description/Content: {description}
     
     Tasks:
-    1. Identify the likely Country of Origin of the video (e.g. India, USA, Brazil, Japan, UK, Korea, Spain, etc.).
-    2. Extract or estimate the following Instagram metrics from the text if mentioned (use "N/A" if not specified):
+    1. Extract or estimate the following Instagram metrics from the text if mentioned (use "N/A" if not specified):
        - Instagram Account Name (username)
        - Views count
        - Likes count
        - Comments count
        - Shares count
        - When the video was posted
-    3. State why this video was selected (selection_reason) and what makes it viral (virality_reason).
-    4. Calculate a Trending/Virality Score between 1.0 and 100.0 based on engagement speed and potential (growth rate, views vs time). If the video got massive views in a short time, give it a very high score (above 85.0). Any niche or category (sports, emotional, news, funny, lifestyle) is acceptable as long as it has high virality.
+    2. State why this video was selected (selection_reason) and what makes it viral (virality_reason).
+    3. Calculate a Trending/Virality Score between 1.0 and 100.0 based on engagement speed and potential (growth rate, views vs time). If the video got massive views in a short time, give it a very high score (above 85.0). Any niche or category (sports, emotional, news, funny, lifestyle) is acceptable as long as it has high virality.
     
     Return ONLY a valid JSON object with the following keys (all values must be strings except trending_score):
-    "country_of_origin": "string",
     "instagram_account": "string",
     "views_count": "string",
     "likes_count": "string",
@@ -256,7 +254,7 @@ async def download_video(rss_url_arg: str = None):
                 "tweet_url": link,
                 "title": title,
                 "description": clean_desc,
-                "country_of_origin": analysis.get("country_of_origin", "Unknown"),
+                "country_of_origin": "Unknown",
                 "instagram_account": analysis.get("instagram_account", "Unknown"),
                 "views_count": analysis.get("views_count", "N/A"),
                 "likes_count": analysis.get("likes_count", "N/A"),
