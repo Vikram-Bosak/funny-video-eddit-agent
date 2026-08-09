@@ -167,6 +167,7 @@ async def download_video(rss_url_arg: str = None):
     ]
     
     nitter_instances = [
+        "https://nitter.perennialte.ch",
         "https://xcancel.com",
         "https://nitter.poast.org",
         "https://nitter.net",
