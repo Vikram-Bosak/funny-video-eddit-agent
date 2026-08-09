@@ -354,11 +354,39 @@ async def edit_video():
         subprocess.run(crop_command, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         
         # 1.5. Draw Red Hook Circle at the start
+        temp_cropped_with_audio = f"exports/{video_id}_temp_cropped_with_audio.mp4"
         temp_circle_video = f"exports/{video_id}_temp_circle.mp4"
-        if draw_hook_circle(temp_video, temp_circle_video):
-            if os.path.exists(temp_video):
-                os.remove(temp_video)
-            os.rename(temp_circle_video, temp_video)
+        
+        # Rename original cropped video to keep it as audio source
+        if os.path.exists(temp_video):
+            os.rename(temp_video, temp_cropped_with_audio)
+            
+        if draw_hook_circle(temp_cropped_with_audio, temp_circle_video):
+            if has_audio:
+                # Merge the audio from temp_cropped_with_audio back with the visual frames from temp_circle_video
+                merge_command = [
+                    "ffmpeg", "-y",
+                    "-i", temp_circle_video,
+                    "-i", temp_cropped_with_audio,
+                    "-map", "0:v:0",
+                    "-map", "1:a:0",
+                    "-c:v", "copy",
+                    "-c:a", "copy",
+                    temp_video
+                ]
+                subprocess.run(merge_command, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                if os.path.exists(temp_circle_video):
+                    os.remove(temp_circle_video)
+                if os.path.exists(temp_cropped_with_audio):
+                    os.remove(temp_cropped_with_audio)
+            else:
+                os.rename(temp_circle_video, temp_video)
+                if os.path.exists(temp_cropped_with_audio):
+                    os.remove(temp_cropped_with_audio)
+        else:
+            # Fallback if circle drawing failed
+            if os.path.exists(temp_cropped_with_audio):
+                os.rename(temp_cropped_with_audio, temp_video)
             
         # 2. Generate subtitles
         ass_path = f"exports/{video_id}_subs.ass"
