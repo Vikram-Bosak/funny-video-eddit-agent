@@ -168,11 +168,36 @@ async def download_video(rss_url_arg: str = None):
     
     nitter_instances = [
         "https://xcancel.com",
-        "https://nitter.catsarch.com",
         "https://nitter.poast.org",
         "https://nitter.net",
         "https://nitter.privacydev.net"
     ]
+    
+    # Dynamically query health monitor for working Nitter RSS mirrors
+    try:
+        import urllib.request
+        import xml.etree.ElementTree as ET
+        req = urllib.request.Request("https://status.d420.de/", headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, timeout=8) as response:
+            html = response.read().decode('utf-8')
+            
+        rows = re.findall(r'<tr>(.*?)</tr>', html, re.DOTALL)
+        dynamic_instances = []
+        for row in rows:
+            if 'healthy">✅' in row:
+                rss_td = re.search(r'<td data-name="rss">(.*?)</td>', row, re.DOTALL)
+                if rss_td and '✅' in rss_td.group(1):
+                    match = re.search(r'href="https:&#x2F;&#x2F;([^"]+)"', row)
+                    if match:
+                        instance_domain = match.group(1).replace('&#x2F;', '/')
+                        dynamic_instances.append(f"https://{instance_domain}")
+                        
+        logger.info(f"Dynamically discovered healthy Nitter RSS mirrors: {dynamic_instances}")
+        if dynamic_instances:
+            # Put healthy dynamic ones first, keeping hardcoded ones as fallback
+            nitter_instances = dynamic_instances + [inst for inst in nitter_instances if inst not in dynamic_instances]
+    except Exception as e:
+        logger.warning(f"Failed to dynamically fetch healthy Nitter mirrors: {e}")
     
     time_limit = datetime.now(timezone.utc) - timedelta(days=7) # Look back 7 days
     valid_videos = []
