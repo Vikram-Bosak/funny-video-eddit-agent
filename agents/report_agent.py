@@ -40,20 +40,32 @@ async def send_report():
             logger.warning(f"Failed to calculate duration: {e}")
             
     # Format and truncate fields to fit Discord Embed limits
-    title = truncate_str(memory.original_title, 100)
-    desc = truncate_str(memory.original_description, 150)
-    transcript = truncate_str(memory.transcript, 300)
-    ocr = truncate_str(memory.ocr_text, 100)
-    translation = truncate_str(memory.translation, 300)
-    summary = truncate_str(memory.summary, 200)
-    script = truncate_str(memory.generated_script, 400)
-    drive_url = memory.google_drive_public_url or 'N/A'
     source_url = memory.source_url or 'N/A'
+    account = memory.instagram_account or 'Unknown'
+    views = memory.views_count or 'N/A'
+    likes = memory.likes_count or 'N/A'
+    comments = memory.comments_count or 'N/A'
+    shares = memory.shares_count or 'N/A'
+    post_time = memory.post_time or 'N/A'
+    sel_reason = memory.selection_reason or 'N/A'
+    score = f"{memory.trending_score:.1f}" if memory.trending_score is not None else 'N/A'
+    viral_reason = memory.virality_reason or 'N/A'
+    
+    dl_status = "✅ Success" if memory.download_success == 1 else "❌ Failed"
+    edit_status = "✅ Success" if memory.edit_success == 1 else "❌ Failed"
+    upload_dest = "Google Drive" if memory.google_drive_public_url else "N/A"
+    drive_url = memory.google_drive_public_url or 'N/A'
+    
+    script = memory.generated_script or 'N/A'
+    summary = memory.summary or 'N/A'
+    final_desc = f"**Summary:** {summary}\n**Voiceover Script:** {script}"
+    
+    err_info = memory.error or "None"
     
     has_failed = memory.error is not None and memory.error != ""
     if has_failed:
         embed_title = "❌ AI Video Automation Pipeline Failed!"
-        embed_desc = f"The pipeline encountered an error: **{truncate_str(memory.error, 300)}**"
+        embed_desc = f"The pipeline encountered an error: **{truncate_str(err_info, 300)}**"
         embed_color = 15158332  # Red color code
     else:
         embed_title = "🚀 AI Video Automation Pipeline Completed!"
@@ -66,24 +78,24 @@ async def send_report():
         "color": embed_color,
         "fields": [
             {
-                "name": "📥 1. Downloaded Video Info",
-                "value": f"**Title:** {title}\n**Desc:** {desc}\n**Source:** [Twitter/X Link]({source_url})"
+                "name": "📊 1. Instagram Discovery & Metrics",
+                "value": f"**Original Link:** [Instagram Reel/Post]({source_url})\n**Account:** @{account}\n**Views:** {views}\n**Likes:** {likes}\n**Comments:** {comments}\n**Shares:** {shares}\n**Posted Time:** {post_time}"
             },
             {
-                "name": "🔍 2. Video Analysis",
-                "value": f"**Summary:** {summary}\n**OCR:** {ocr}\n**Transcript:**\n```\n{transcript}\n```"
+                "name": "🎯 2. Selection & Virality Analysis",
+                "value": f"**Virality Score:** {score}\n**Why Selected:** {sel_reason}\n**Key Virality Factor:** {viral_reason}"
             },
             {
-                "name": "✍️ 3. AI Generated Script",
-                "value": f"```\n{script}\n```"
+                "name": "⚙️ 3. Execution Status",
+                "value": f"**Download Success:** {dl_status}\n**Editing Success:** {edit_status}\n**Upload Destination:** {upload_dest}\n**Final Video Link:** [Public Link]({drive_url})\n**Duration:** {duration_str}"
             },
             {
-                "name": "🎬 4. Final Output Link",
-                "value": f"🔗 [Google Drive Public Link]({drive_url})"
+                "name": "📝 4. Final Video Details",
+                "value": truncate_str(final_desc, 1000)
             },
             {
-                "name": "⚙️ 5. Metrics & Github",
-                "value": f"**Time:** {duration_str}\n**Run:** [Github Action Run]({memory.github_run_url or 'https://github.com'})"
+                "name": "⚠️ 5. Errors / Warning Info",
+                "value": f"```\n{truncate_str(err_info, 200)}\n```"
             }
         ],
         "timestamp": datetime.utcnow().isoformat() + "Z",
@@ -103,6 +115,6 @@ async def send_report():
     except Exception as e:
         logger.error(f"Error sending report to Discord: {e}")
         logger.warning("Continuing despite Discord reporting failure.")
-
+ 
 if __name__ == "__main__":
     asyncio.run(send_report())

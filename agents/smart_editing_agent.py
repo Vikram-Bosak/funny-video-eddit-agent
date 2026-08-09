@@ -322,6 +322,15 @@ async def edit_video():
     final_video_path = f"exports/{video_id}_final.mp4"
     
     try:
+        # Probe if video has audio stream
+        has_audio = False
+        try:
+            probe = ffmpeg.probe(video_path)
+            has_audio = any(stream['codec_type'] == 'audio' for stream in probe['streams'])
+            logger.info(f"Video audio stream detected: {has_audio}")
+        except Exception as e:
+            logger.warning(f"Failed to probe video audio: {e}")
+
         # 1. Crop video to 9:16, seek to crop_start, set crop_duration
         crop_start = memory.crop_start if memory.crop_start is not None else 0.0
         crop_duration = memory.crop_duration if memory.crop_duration is not None else 59.0
@@ -334,10 +343,14 @@ async def edit_video():
             "-ss", str(crop_start),
             "-t", str(crop_duration),
             "-vf", "crop=ih*(9/16):ih:(iw-ih*(9/16))/2:0,setpts=PTS-STARTPTS",
-            "-c:v", "libx264",
-            "-an",
-            temp_video
+            "-c:v", "libx264"
         ]
+        if has_audio:
+            crop_command.extend(["-c:a", "aac"])
+        else:
+            crop_command.extend(["-an"])
+        crop_command.append(temp_video)
+
         subprocess.run(crop_command, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         
         # 1.5. Draw Red Hook Circle at the start
@@ -351,28 +364,9 @@ async def edit_video():
         ass_path = f"exports/{video_id}_subs.ass"
         subs_success = generate_ass_subtitles(voiceover_path, ass_path)
         
-        # 3. Add Voiceover, plan sound effects (Rule 114 completely removed) and burn in subtitles
-        logger.info("Mixing voiceover and planned sound effects (original audio completely removed)...")
+        # 3. Add Voiceover and burn in subtitles (Sound Effects completely removed per user request)
+        logger.info("Mixing voiceover with video (original audio swap logic)...")
         
-        # Retrieve planned sound effects from memory
-        sound_effects_str = memory.sound_effects if hasattr(memory, "sound_effects") and memory.sound_effects else "[]"
-        try:
-            sound_effects = json.loads(sound_effects_str)
-        except Exception:
-            sound_effects = []
-            
-        logger.info(f"Retrieved planned sound effects: {sound_effects}")
-        
-        # Generate SFX files on demand
-        sfx_paths = []
-        for i, sfx in enumerate(sound_effects):
-            sfx_path = f"exports/{video_id}_sfx_{i}.wav"
-            try:
-                generate_sfx(sfx["type"], sfx_path)
-                sfx_paths.append((sfx_path, float(sfx["time_offset"])))
-            except Exception as e:
-                logger.error(f"Failed to generate SFX {sfx['type']}: {e}")
-
         T = crop_duration
         
         # FFmpeg command inputs
@@ -381,8 +375,6 @@ async def edit_video():
             "-stream_loop", "-1", "-i", temp_video,
             "-i", voiceover_path
         ])
-        for sfx_path, _ in sfx_paths:
-            command.extend(["-i", sfx_path])
 
         filter_complex_parts = []
         video_output_label = "0:v:0"
@@ -391,21 +383,27 @@ async def edit_video():
             filter_complex_parts.append(f"[0:v:0]subtitles='{escaped_ass}'[v_subbed]")
             video_output_label = "[v_subbed]"
             
-        # Build audio filter graph
-        filter_parts = []
-        mix_inputs = ["[1:a]"]
-        
-        # Delay each sound effect to its planned time_offset
-        for idx, (_, time_offset) in enumerate(sfx_paths):
-            sfx_input_idx = 2 + idx
-            sfx_time_ms = int(time_offset * 1000)
-            out_label = f"[sfx_delayed_{idx}]"
-            filter_parts.append(f"[{sfx_input_idx}:a]asetpts=PTS-STARTPTS,adelay={sfx_time_ms}|{sfx_time_ms}{out_label}")
-            mix_inputs.append(out_label)
+        # Implement 5 seconds original audio swap logic
+        # Swap between TTS and original audio for 5 seconds in the middle of the video
+        if has_audio and T >= 5.0:
+            S_orig = (T - 5.0) / 2.0
+            E_orig = S_orig + 5.0
+            S_orig_ms = int(S_orig * 1000)
+            E_orig_ms = int(E_orig * 1000)
             
-        # Mix voiceover with sound effects and reset final audio PTS to 0
-        filter_parts.append("".join(mix_inputs) + f"amix=inputs={len(mix_inputs)}:normalize=0,asetpts=PTS-STARTPTS[final_audio]")
-        filter_complex_parts.extend(filter_parts)
+            # Slice TTS audio: Part 1 (0 to S_orig), Part 2 (S_orig to end delayed to start at E_orig)
+            filter_complex_parts.append(f"[1:a]atrim=end={S_orig:.2f},asetpts=PTS-STARTPTS[tts1]")
+            filter_complex_parts.append(f"[1:a]atrim=start={S_orig:.2f},asetpts=PTS-STARTPTS,adelay={E_orig_ms}|{E_orig_ms}[tts2]")
+            
+            # Slice Original audio: Part (S_orig to E_orig delayed to start at S_orig)
+            filter_complex_parts.append(f"[0:a]atrim=start={S_orig:.2f}:end={E_orig:.2f},asetpts=PTS-STARTPTS,adelay={S_orig_ms}|{S_orig_ms}[orig_mid]")
+            
+            # Mix the 3 non-overlapping parts
+            filter_complex_parts.append("[tts1][orig_mid][tts2]amix=inputs=3:normalize=0[final_audio]")
+        else:
+            # Just play TTS audio continuously, no original audio mixed in
+            filter_complex_parts.append("[1:a]asetpts=PTS-STARTPTS[final_audio]")
+            
         audio_output_label = "[final_audio]"
             
         if filter_complex_parts:
@@ -431,23 +429,27 @@ async def edit_video():
         # Cleanup temp files
         if os.path.exists(temp_video):
             os.remove(temp_video)
-        for sfx_path, _ in sfx_paths:
-            if os.path.exists(sfx_path):
-                os.remove(sfx_path)
             
         await async_update_memory(video_id, {
             "final_video_path": final_video_path,
+            "edit_success": 1,
             "end_time": datetime.now(timezone.utc).isoformat()
         })
         logger.success("Video editing and subtitle burn-in complete.")
         
     except ffmpeg.Error as e:
         logger.error(f"FFmpeg error: {e.stderr.decode() if e.stderr else e}")
-        await async_update_memory(video_id, {"error": str(e)})
+        await async_update_memory(video_id, {
+            "error": str(e),
+            "edit_success": 0
+        })
         sys.exit(1)
     except Exception as e:
         logger.error(f"Error during video editing: {e}")
-        await async_update_memory(video_id, {"error": str(e)})
+        await async_update_memory(video_id, {
+            "error": str(e),
+            "edit_success": 0
+        })
         sys.exit(1)
 
 if __name__ == "__main__":

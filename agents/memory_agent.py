@@ -33,6 +33,18 @@ class MemoryModel(BaseModel):
     crop_start: Optional[float] = None
     crop_duration: Optional[float] = None
     sound_effects: Optional[str] = None
+    country_of_origin: Optional[str] = None
+    trending_score: Optional[float] = None
+    instagram_account: Optional[str] = None
+    views_count: Optional[str] = None
+    likes_count: Optional[str] = None
+    comments_count: Optional[str] = None
+    shares_count: Optional[str] = None
+    post_time: Optional[str] = None
+    selection_reason: Optional[str] = None
+    virality_reason: Optional[str] = None
+    download_success: Optional[int] = None
+    edit_success: Optional[int] = None
     error: Optional[str] = None
 
 def init_db():
@@ -62,13 +74,46 @@ def init_db():
             crop_start REAL,
             crop_duration REAL,
             sound_effects TEXT,
+            country_of_origin TEXT,
+            trending_score REAL,
+            instagram_account TEXT,
+            views_count TEXT,
+            likes_count TEXT,
+            comments_count TEXT,
+            shares_count TEXT,
+            post_time TEXT,
+            selection_reason TEXT,
+            virality_reason TEXT,
+            download_success INTEGER,
+            edit_success INTEGER,
             error TEXT
         )
     ''')
-    try:
-        c.execute("ALTER TABLE memory ADD COLUMN sound_effects TEXT")
-    except sqlite3.OperationalError:
-        pass
+    
+    # Run migrations dynamically for existing databases
+    cols = [
+        ("crop_start", "REAL"),
+        ("crop_duration", "REAL"),
+        ("sound_effects", "TEXT"),
+        ("country_of_origin", "TEXT"),
+        ("trending_score", "REAL"),
+        ("instagram_account", "TEXT"),
+        ("views_count", "TEXT"),
+        ("likes_count", "TEXT"),
+        ("comments_count", "TEXT"),
+        ("shares_count", "TEXT"),
+        ("post_time", "TEXT"),
+        ("selection_reason", "TEXT"),
+        ("virality_reason", "TEXT"),
+        ("download_success", "INTEGER"),
+        ("edit_success", "INTEGER")
+    ]
+    for col_name, col_type in cols:
+        try:
+            c.execute(f"ALTER TABLE memory ADD COLUMN {col_name} {col_type}")
+        except sqlite3.OperationalError:
+            pass
+            
     conn.commit()
     conn.close()
     logger.info("Database initialized.")

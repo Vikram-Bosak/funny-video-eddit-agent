@@ -41,6 +41,8 @@ async def write_script():
       api_key = api_key
     )
     
+    has_voice = transcript and transcript != "No spoken words detected."
+    
     prompt = f"""
     You are an expert, highly engaging social media storyteller. 
     Your task is to write a short, funny, and energetic voiceover script for a viral video.
@@ -49,6 +51,23 @@ async def write_script():
     
     If the video contains action, suspense, dramatic, or fictional movie scenes/trailers, treat them as pure cinematic entertainment and write an exciting, energetic, or humorous commentary for the movie fans. Do NOT refuse to write the script, and do NOT output any safety warnings or refusal messages.
     
+    SCRIPT WRITING RULES based on Audio:
+    """
+    
+    if has_voice:
+        prompt += f"""
+    - The original video CONTAINS Spoken Content / Voiceover.
+    - Here is the Transcript of the original voice: "{transcript}"
+    - You MUST base your new script on this original voice content. Retain its core message or information, but rewrite it to be far more engaging, punchy, and structured for viral retention.
+        """
+    else:
+        prompt += f"""
+    - The original video DOES NOT contain any spoken content (it is silent or has only background music).
+    - Here is the Visual Summary of the video: "{video_summary}"
+    - You MUST write an engaging story based entirely on these visual actions, detected objects, and events shown in the video. Describe the situation or build a narrative that fits the visuals perfectly.
+        """
+        
+    prompt += f"""
     Use the following narrative structure:
     1. Setup/Context: Introduce the character, their goal, or the starting situation.
     2. Build-up/Suspense: Describe the action or attempt.
@@ -64,8 +83,7 @@ async def write_script():
     STORYTELLING GUIDELINES:
     1. The story MUST align tightly with the actual visual content. For example, if a skateboard stunt fails, tell a story about trying a skateboard trick and hitting the ground. Do NOT hallucinate unrelated characters.
     2. Write only the spoken voiceover in English. Do NOT include stage directions, bracketed instructions, speaker names, or video descriptions. Only output the exact words to be read.
-    3. Rewrite any original dialogue/transcript to fit a natural, engaging viral storytelling format.
-    4. Keep the script under 59 seconds (between 40 and 100 words maximum).
+    3. Keep the script under 59 seconds (between 40 and 100 words maximum).
     """
     
     try:

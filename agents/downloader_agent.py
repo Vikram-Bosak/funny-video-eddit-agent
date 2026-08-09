@@ -88,15 +88,86 @@ async def is_video_funny(title: str, description: str) -> bool:
         logger.warning(f"Humor check failed, defaulting to True: {e}")
         return True
 
+async def analyze_reels_metadata(title: str, description: str, username: str) -> dict:
+    api_key = os.environ.get("NVIDIA_API_KEY", "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")
+    client = OpenAI(
+        base_url="https://integrate.api.nvidia.com/v1",
+        api_key=api_key
+    )
+    prompt = f"""
+    You are an expert social media analyst. Analyze the following tweet sharing an Instagram Reel:
+    Username: {username}
+    Tweet Title: {title}
+    Tweet Description/Content: {description}
+    
+    Tasks:
+    1. Identify the likely Country of Origin of the video (e.g. India, USA, Brazil, Japan, UK, Korea, Spain, etc.).
+    2. Extract or estimate the following Instagram metrics from the text if mentioned (use "N/A" if not specified):
+       - Instagram Account Name (username)
+       - Views count
+       - Likes count
+       - Comments count
+       - Shares count
+       - When the video was posted
+    3. State why this video was selected (selection_reason) and what makes it viral (virality_reason).
+    4. Calculate a Trending/Virality Score between 1.0 and 100.0 based on engagement speed and potential.
+    5. Verify if this video is funny, humorous, comedic, or viral material (is_funny).
+    
+    Return ONLY a valid JSON object with the following keys (all values must be strings except trending_score and is_funny):
+    "country_of_origin": "string",
+    "instagram_account": "string",
+    "views_count": "string",
+    "likes_count": "string",
+    "comments_count": "string",
+    "shares_count": "string",
+    "post_time": "string",
+    "selection_reason": "string",
+    "virality_reason": "string",
+    "trending_score": float,
+    "is_funny": boolean
+    
+    Do not output any explanation or extra text outside the JSON.
+    """
+    try:
+        def query():
+            completion = client.chat.completions.create(
+              model="meta/llama-3.1-70b-instruct",
+              messages=[{"role":"user","content": prompt}],
+              temperature=0.1,
+              max_tokens=500,
+              stream=False
+            )
+            return completion.choices[0].message.content.strip()
+        res = await asyncio.to_thread(query)
+        logger.info(f"LLM reels analysis: {res}")
+        clean_json = res.replace("```json", "").replace("```", "").strip()
+        return json.loads(clean_json)
+    except Exception as e:
+        logger.warning(f"Failed to analyze reels metadata: {e}")
+        return {
+            "country_of_origin": "Unknown",
+            "instagram_account": "Unknown",
+            "views_count": "N/A",
+            "likes_count": "N/A",
+            "comments_count": "N/A",
+            "shares_count": "N/A",
+            "post_time": "N/A",
+            "selection_reason": "Fallback due to error",
+            "virality_reason": "Fallback due to error",
+            "trending_score": 10.0,
+            "is_funny": True
+        }
+
 async def download_video(rss_url_arg: str = None):
-    logger.info("Starting Multi-Keyword Nitter Search Downloader...")
+    logger.info("Starting Instagram Reels Trending Downloader...")
     
     # Track duplicates
     processed_urls = load_history()
     
+    # Queries targeted to find instagram reels
     keywords = [
-        "funny fails", "epic fails", "comedy moments", 
-        "hilarious prank", "try not to laugh meme", "unexpected funny video"
+        "instagram.com/reel", "instagram.com/reels", "instagram.com/p",
+        "#trendingreels", "#viralreels"
     ]
     
     nitter_instances = [
@@ -106,7 +177,7 @@ async def download_video(rss_url_arg: str = None):
         "https://nitter.perennialte.ch"
     ]
     
-    time_limit = datetime.now(timezone.utc) - timedelta(days=7) # Look back 7 days for more options
+    time_limit = datetime.now(timezone.utc) - timedelta(days=7) # Look back 7 days
     valid_videos = []
     
     for keyword in keywords:
@@ -115,8 +186,7 @@ async def download_video(rss_url_arg: str = None):
         items = []
         
         for instance in nitter_instances:
-            # Query Nitter search with media filter
-            encoded_query = urllib.parse.quote(f"{keyword} filter:media")
+            encoded_query = urllib.parse.quote(f"{keyword}")
             url = f"{instance}/search/rss?f=tweets&q={encoded_query}"
             try:
                 def fetch_url(url):
@@ -141,27 +211,30 @@ async def download_video(rss_url_arg: str = None):
             link = item.find('link').text if item.find('link') is not None else ""
             pubDate_str = item.find('pubDate').text if item.find('pubDate') is not None else ""
             desc = item.find('description').text if item.find('description') is not None else ""
-            title = item.find('title').text if item.find('title') is not None else "Funny Video"
+            title = item.find('title').text if item.find('title') is not None else "Instagram Reel"
             
             if not link or not pubDate_str:
                 continue
                 
-            if ">Video<" not in desc and "Video" not in desc:
+            # Extract any instagram reel link from the content
+            ig_urls = re.findall(r'https?://(?:www\.)?instagram\.com/(?:reel|reels|p)/[a-zA-Z0-9_\-]+', desc)
+            if not ig_urls:
+                continue
+            
+            ig_url = ig_urls[0]
+            
+            # Skip duplicates
+            if ig_url in processed_urls:
                 continue
                 
             try:
-                tweet_id = link.split("/status/")[1].split("#")[0].split("?")[0]
+                post_time_parsed = parsedate_to_datetime(pubDate_str)
+                if post_time_parsed.tzinfo is None:
+                    post_time_parsed = post_time_parsed.replace(tzinfo=timezone.utc)
             except:
                 continue
                 
-            try:
-                post_time = parsedate_to_datetime(pubDate_str)
-                if post_time.tzinfo is None:
-                    post_time = post_time.replace(tzinfo=timezone.utc)
-            except:
-                continue
-                
-            if post_time < time_limit:
+            if post_time_parsed < time_limit:
                 continue
                 
             # Extract user from link if available
@@ -173,40 +246,53 @@ async def download_video(rss_url_arg: str = None):
                     username = link.split(".net/")[1].split("/status/")[0]
                 except:
                     pass
-                    
-            original_tweet_url = f"https://twitter.com/{username}/status/{tweet_id}"
             
-            # Skip duplicates
-            if original_tweet_url in processed_urls:
-                continue
-                
             # HTML tag cleaning for description check
             clean_desc = re.sub('<[^<]+?>', '', desc) if desc else ""
             
+            # Perform LLM analysis on the post to calculate Trending Score and Country of Origin
+            analysis = await analyze_reels_metadata(title, clean_desc, username)
+            
+            is_funny_val = analysis.get("is_funny", True)
+            if isinstance(is_funny_val, str):
+                is_funny_val = is_funny_val.strip().lower() in ("true", "1", "yes")
+                
+            if not is_funny_val:
+                logger.info(f"Skipping non-funny reel: {ig_url}")
+                continue
+                
             valid_videos.append({
-                "url": original_tweet_url,
+                "url": ig_url,
+                "tweet_url": link,
                 "title": title,
-                "description": clean_desc
+                "description": clean_desc,
+                "country_of_origin": analysis.get("country_of_origin", "Unknown"),
+                "instagram_account": analysis.get("instagram_account", "Unknown"),
+                "views_count": analysis.get("views_count", "N/A"),
+                "likes_count": analysis.get("likes_count", "N/A"),
+                "comments_count": analysis.get("comments_count", "N/A"),
+                "shares_count": analysis.get("shares_count", "N/A"),
+                "post_time": analysis.get("post_time", "N/A"),
+                "selection_reason": analysis.get("selection_reason", "N/A"),
+                "virality_reason": analysis.get("virality_reason", "N/A"),
+                "trending_score": float(analysis.get("trending_score", 10.0))
             })
             
     if not valid_videos:
-        logger.error("No valid recent and un-processed videos found.")
+        logger.error("No valid recent and un-processed Instagram videos found.")
         sys.exit(1)
         
+    # Sort videos by trending score in descending order
+    valid_videos.sort(key=lambda x: x["trending_score"], reverse=True)
+    
     os.makedirs("downloads", exist_ok=True)
     video_id = str(uuid.uuid4())
     output_path = f"downloads/{video_id}.mp4"
     
-    # Try downloading videos until one succeeds and passes humor check
+    # Try downloading the best videos by trending score
     for video in valid_videos:
         target_url = video["url"]
-        
-        # Verify humor before downloading
-        is_funny = await is_video_funny(video["title"], video["description"])
-        if not is_funny:
-            logger.info(f"Skipping non-funny video: {target_url}")
-            continue
-            
+        logger.info(f"Selected Top Video (Origin: {video['country_of_origin']}, Score: {video['trending_score']}): {target_url}")
         logger.info(f"Attempting to download {target_url}...")
         
         command = [
@@ -224,7 +310,23 @@ async def download_video(rss_url_arg: str = None):
             )
             stdout, stderr = await proc.communicate()
             
-            if proc.returncode == 0 and os.path.exists(output_path):
+            # Fallback to download from tweet itself if Instagram direct link download fails
+            if proc.returncode != 0 or not os.path.exists(output_path):
+                logger.warning(f"Direct Instagram download failed. Trying tweet backup download: {video['tweet_url']}")
+                command_backup = [
+                    "yt-dlp",
+                    "--output", output_path,
+                    "--quiet",
+                    video["tweet_url"]
+                ]
+                proc_backup = await asyncio.create_subprocess_exec(
+                    *command_backup,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
+                )
+                await proc_backup.communicate()
+                
+            if os.path.exists(output_path):
                 logger.success(f"Download successful! Video ID: {video_id}")
                 
                 # Save to history to prevent duplicates in future runs
@@ -235,6 +337,18 @@ async def download_video(rss_url_arg: str = None):
                     "original_title": video["title"],
                     "original_description": video["description"],
                     "local_video_path": output_path,
+                    "country_of_origin": video["country_of_origin"],
+                    "trending_score": video["trending_score"],
+                    "instagram_account": video["instagram_account"],
+                    "views_count": video["views_count"],
+                    "likes_count": video["likes_count"],
+                    "comments_count": video["comments_count"],
+                    "shares_count": video["shares_count"],
+                    "post_time": video["post_time"],
+                    "selection_reason": video["selection_reason"],
+                    "virality_reason": video["virality_reason"],
+                    "download_success": 1,
+                    "edit_success": 0,
                     "start_time": datetime.now(timezone.utc).isoformat(),
                     "github_repository": os.environ.get("GITHUB_REPOSITORY"),
                     "github_run_id": os.environ.get("GITHUB_RUN_ID"),
@@ -242,9 +356,9 @@ async def download_video(rss_url_arg: str = None):
                 })
                 return
             else:
-                logger.warning(f"yt-dlp failed for {target_url}. Trying next video...")
+                logger.warning(f"Download failed for {target_url}. Trying next highest scored video...")
         except Exception as e:
-            logger.warning(f"Error executing yt-dlp: {e}")
+            logger.warning(f"Error executing download: {e}")
             
     logger.error("Failed to download any funny and unprocessed video.")
     sys.exit(1)
