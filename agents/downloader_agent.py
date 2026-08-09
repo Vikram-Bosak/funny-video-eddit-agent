@@ -110,10 +110,9 @@ async def analyze_reels_metadata(title: str, description: str, username: str) ->
        - Shares count
        - When the video was posted
     3. State why this video was selected (selection_reason) and what makes it viral (virality_reason).
-    4. Calculate a Trending/Virality Score between 1.0 and 100.0 based on engagement speed and potential.
-    5. Verify if this video is funny, humorous, comedic, or viral material (is_funny).
+    4. Calculate a Trending/Virality Score between 1.0 and 100.0 based on engagement speed and potential (growth rate, views vs time). If the video got massive views in a short time, give it a very high score (above 85.0). Any niche or category (sports, emotional, news, funny, lifestyle) is acceptable as long as it has high virality.
     
-    Return ONLY a valid JSON object with the following keys (all values must be strings except trending_score and is_funny):
+    Return ONLY a valid JSON object with the following keys (all values must be strings except trending_score):
     "country_of_origin": "string",
     "instagram_account": "string",
     "views_count": "string",
@@ -123,8 +122,7 @@ async def analyze_reels_metadata(title: str, description: str, username: str) ->
     "post_time": "string",
     "selection_reason": "string",
     "virality_reason": "string",
-    "trending_score": float,
-    "is_funny": boolean
+    "trending_score": float
     
     Do not output any explanation or extra text outside the JSON.
     """
@@ -253,14 +251,6 @@ async def download_video(rss_url_arg: str = None):
             # Perform LLM analysis on the post to calculate Trending Score and Country of Origin
             analysis = await analyze_reels_metadata(title, clean_desc, username)
             
-            is_funny_val = analysis.get("is_funny", True)
-            if isinstance(is_funny_val, str):
-                is_funny_val = is_funny_val.strip().lower() in ("true", "1", "yes")
-                
-            if not is_funny_val:
-                logger.info(f"Skipping non-funny reel: {ig_url}")
-                continue
-                
             valid_videos.append({
                 "url": ig_url,
                 "tweet_url": link,
