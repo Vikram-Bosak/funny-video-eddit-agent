@@ -167,10 +167,11 @@ async def download_video(rss_url_arg: str = None):
     ]
     
     nitter_instances = [
+        "https://xcancel.com",
+        "https://nitter.catsarch.com",
         "https://nitter.poast.org",
         "https://nitter.net",
-        "https://nitter.privacydev.net",
-        "https://nitter.perennialte.ch"
+        "https://nitter.privacydev.net"
     ]
     
     time_limit = datetime.now(timezone.utc) - timedelta(days=7) # Look back 7 days
