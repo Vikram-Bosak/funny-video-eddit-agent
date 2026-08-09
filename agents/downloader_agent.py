@@ -162,8 +162,26 @@ async def download_video(rss_url_arg: str = None):
     
     # Queries targeted to find instagram reels
     keywords = [
-        "instagram.com/reel", "instagram.com/reels", "instagram.com/p",
-        "#trendingreels", "#viralreels"
+        "fitness",
+        "gym",
+        "sports",
+        "viral shorts",
+        "gym motivation",
+        "ufc",
+        "mma",
+        "workout",
+        "powerlifting",
+        "sports highlights",
+        "crazy gym moments",
+        "fitness fails and wins",
+        "viral sports clips",
+        "ufc best moments",
+        "funny gym reactions",
+        "extreme powerlifting",
+        "sports shocking moments",
+        "smart plays in sports",
+        "gym motivation status",
+        "combat sports highlights"
     ]
     
     nitter_instances = [
@@ -209,7 +227,7 @@ async def download_video(rss_url_arg: str = None):
         items = []
         
         for instance in nitter_instances:
-            encoded_query = urllib.parse.quote(f"{keyword}")
+            encoded_query = urllib.parse.quote(f"{keyword} instagram.com/reel")
             url = f"{instance}/search/rss?f=tweets&q={encoded_query}"
             try:
                 def fetch_url(url):
